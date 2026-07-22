@@ -1,104 +1,93 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <title>BTC</title>
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
-body{margin:0;background:#0d1117;color:#c9d1d9;font-family:system-ui;overflow:hidden}
-#h{background:#161b22;padding:5px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+body{margin:0;background:#0d1117;color:#c9d1d9;font-family:system-ui;overflow:hidden;-webkit-text-size-adjust:100%}
+#h{background:#161b22;padding:5px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 #h h2{color:#e94560;font-size:13px;margin:0}
-#p{font-size:18px;font-weight:700}
+#p{font-size:17px;font-weight:700}
 .g{color:#3fb950}.r{color:#f85149}
 .t{display:flex;gap:3px;margin-left:auto}
-.t button{background:#21262d;border:1px solid #30363d;color:#8b949e;padding:2px 8px;border-radius:3px;cursor:pointer;font-size:10px}
+.t button{background:#21262d;border:1px solid #30363d;color:#8b949e;padding:2px 7px;border-radius:3px;cursor:pointer;font-size:10px}
 .t button.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
-#ind{display:flex;gap:4px;flex-wrap:wrap;font-size:10px;background:#161b22;padding:4px 12px;border-bottom:1px solid #30363d}
-#ind label{display:flex;align-items:center;gap:3px;cursor:pointer;padding:2px 6px;border-radius:3px}
-#ind input{margin:0}
-#ct{width:100%;height:calc(100vh - 65px)}
+#ind{display:flex;gap:3px;flex-wrap:wrap;font-size:10px;background:#161b22;padding:3px 10px;border-bottom:1px solid #30363d}
+#ind label{display:flex;align-items:center;gap:2px;cursor:pointer;padding:2px 5px;border-radius:3px;white-space:nowrap}
+#ind input{margin:0;width:13px;height:13px}
+#ct{width:100%;height:calc(100vh - 62px)}
 </style>
 </head>
 <body>
 <div id="h">
   <h2>🐉 BTC</h2>
-  <span id="p">--</span>
+  <span id="p">Yukleniyor...</span>
   <span id="c"></span>
   <div class="t">
-    <button data-i="1d" class="on">Gün</button>
-    <button data-i="1h">1s</button>
-    <button data-i="1m">1dk</button>
+    <button data-v="d" class="on">Gun</button>
+    <button data-v="h">1s</button>
+    <button data-v="m">1dk</button>
   </div>
 </div>
 <div id="ind">
-  <label style="border-left:3px solid #f0883e"><input type="checkbox" id="s7" checked>SMA7</label>
-  <label style="border-left:3px solid #ffd700"><input type="checkbox" id="s25" checked>SMA25</label>
-  <label style="border-left:3px solid #ff6b9d"><input type="checkbox" id="s99" checked>SMA99</label>
-  <label style="border-left:3px solid #8b5cf6"><input type="checkbox" id="bb">BB</label>
-  <label style="border-left:3px solid #22d3ee"><input type="checkbox" id="rsi">RSI</label>
+  <label style="border-left:3px solid #f0883e"><input type="checkbox" id="a" checked>SMA7</label>
+  <label style="border-left:3px solid #ffd700"><input type="checkbox" id="b" checked>SMA25</label>
+  <label style="border-left:3px solid #ff6b9d"><input type="checkbox" id="c" checked>SMA99</label>
+  <label style="border-left:3px solid #8b5cf6"><input type="checkbox" id="d">BB</label>
+  <label style="border-left:3px solid #22d3ee"><input type="checkbox" id="e">RSI</label>
 </div>
 <div id="ct"></div>
 <script>
-var url='https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=500';
-var iv='1d', chart, cs, l7, l25, l99, bu, bm, bl, rp, rs, dd=[];
+// EMBEDDED DATA - 100 gunluk BTC verisi
+var DATA=[{"time":1774310400,"o":70866,"h":71377.5,"l":68884.5,"c":70523.9},{"time":1774396800,"o":70524,"h":71999.9,"l":70375,"c":71297.5},{"time":1774483200,"o":71297.5,"h":71408.1,"l":68115.8,"c":68788},{"time":1774569600,"o":68788.1,"h":69142.7,"l":65501,"c":66364.2},{"time":1774656000,"o":66364.1,"h":67284,"l":65888,"c":66334.8},{"time":1774742400,"o":66334.8,"h":67100,"l":64918.2,"c":65977.9},{"time":1774828800,"o":65978,"h":68148.4,"l":65754.2,"c":66764.4},{"time":1774915200,"o":66764.4,"h":68600,"l":65938,"c":68241.5},{"time":1775001600,"o":68241.4,"h":69288,"l":67534.9,"c":68086.5},{"time":1775088000,"o":68086.4,"h":68639.1,"l":65676.1,"c":66868.5},{"time":1775174400,"o":66868.6,"h":67350,"l":66240,"c":66930},{"time":1775260800,"o":66930,"h":67554.5,"l":66745.5,"c":67271},{"time":1775347200,"o":67271.1,"h":69108,"l":66575.5,"c":68997.9},{"time":1775433600,"o":68997.9,"h":70332.5,"l":68227.5,"c":68817.9},{"time":1775520000,"o":68817.9,"h":72743.4,"l":67711,"c":71890.2},{"time":1775606400,"o":71890.2,"h":72858.5,"l":70671.6,"c":71038.1},{"time":1775692800,"o":71038.2,"h":73128,"l":70428,"c":71750.4},{"time":1775779200,"o":71750.4,"h":73450,"l":71382.1,"c":72917.4},{"time":1775865600,"o":72917.4,"h":73773.4,"l":72451.9,"c":73013.4},{"time":1775952000,"o":73013.4,"h":73094.4,"l":70458.2,"c":70711.1},{"time":1776038400,"o":70711.2,"h":74870,"l":70517.3,"c":74385},{"time":1776124800,"o":74384.9,"h":76009,"l":73766.8,"c":74106.9},{"time":1776211200,"o":74106.9,"h":75425.6,"l":73449,"c":74776.2},{"time":1776297600,"o":74776.3,"h":75500,"l":73256.8,"c":75106.8},{"time":1776384000,"o":75106.8,"h":78300,"l":74480,"c":77030.6},{"time":1776470400,"o":77030.6,"h":77380,"l":75395.9,"c":75653.8},{"time":1776556800,"o":75653.8,"h":76200,"l":73700.2,"c":73758.4},{"time":1776643200,"o":73758.4,"h":76531,"l":73669,"c":75790.1},{"time":1776729600,"o":75790.1,"h":76999,"l":74777.9,"c":76288.2},{"time":1776816000,"o":76288.3,"h":79444,"l":76078.6,"c":78139.8},{"time":1776902400,"o":78139.7,"h":78648,"l":76504.6,"c":78216.8},{"time":1776988800,"o":78217.4,"h":78546,"l":77206.8,"c":77395.4},{"time":1777075200,"o":77395.3,"h":77847,"l":77100,"c":77585},{"time":1777161600,"o":77585,"h":78994.8,"l":77280,"c":78613.5},{"time":1777248000,"o":78614.4,"h":79455,"l":76400,"c":77331.2},{"time":1777334400,"o":77331.2,"h":77450,"l":75635.6,"c":76298.1},{"time":1777420800,"o":76298.2,"h":77873.2,"l":74868,"c":75749.9},{"time":1777507200,"o":75749.9,"h":76630.3,"l":75273.5,"c":76305.4},{"time":1777593600,"o":76305.4,"h":78879.9,"l":76265.4,"c":78192},{"time":1777680000,"o":78191.9,"h":79145,"l":77979.3,"c":78652.9},{"time":1777766400,"o":78652.8,"h":79428.9,"l":78027,"c":78529},{"time":1777852800,"o":78529,"h":80771.7,"l":78128.3,"c":79826.1},{"time":1777939200,"o":79826.1,"h":81745.4,"l":79761.2,"c":80861.9},{"time":1778025600,"o":80861.9,"h":82828.7,"l":80651.2,"c":81390.1},{"time":1778112000,"o":81390,"h":81680.6,"l":79461.5,"c":79969.4},{"time":1778198400,"o":79969.5,"h":80478,"l":79137.4,"c":80155.2},{"time":1778284800,"o":80155.2,"h":81043.2,"l":80080,"c":80634},{"time":1778371200,"o":80634,"h":82460.5,"l":80225.1,"c":82177.7},{"time":1778457600,"o":82177.7,"h":82350,"l":80394,"c":81699.1},{"time":1778544000,"o":81699.1,"h":81757.3,"l":79801,"c":80461},{"time":1778630400,"o":80461,"h":81270.2,"l":78713.8,"c":79288.3},{"time":1778716800,"o":79288.2,"h":81999,"l":78869.4,"c":81048.9},{"time":1778803200,"o":81048.8,"h":81623.8,"l":78610,"c":79074},{"time":1778889600,"o":79074,"h":79199.7,"l":77601.8,"c":78104.2},{"time":1778976000,"o":78104.3,"h":78564.3,"l":76666,"c":77430.4},{"time":1779062400,"o":77430.4,"h":77757.5,"l":76014.2,"c":76963.2},{"time":1779148800,"o":76963.2,"h":77384.6,"l":76107.1,"c":76799.9},{"time":1779235200,"o":76800,"h":77825.8,"l":76485,"c":77510.3},{"time":1779321600,"o":77510.3,"h":78180,"l":76696.7,"c":77586.2},{"time":1779408000,"o":77586.3,"h":77862.7,"l":75322,"c":75513.1},{"time":1779494400,"o":75513.1,"h":77427,"l":74203.6,"c":76715.2},{"time":1779580800,"o":76715.3,"h":77600,"l":76056,"c":77030.3},{"time":1779667200,"o":77030.3,"h":77887.9,"l":76871.4,"c":77281.5},{"time":1779753600,"o":77281.5,"h":78077.1,"l":75641.2,"c":75905.5},{"time":1779840000,"o":75905.6,"h":76155.5,"l":74210,"c":74418.1},{"time":1779926400,"o":74418,"h":74565.3,"l":72556,"c":73591.4},{"time":1780012800,"o":73591.4,"h":74293.1,"l":72436,"c":73428.2},{"time":1780099200,"o":73428.2,"h":74108.8,"l":73130.1,"c":73856.8},{"time":1780185600,"o":73856.9,"h":74250,"l":73340.7,"c":73653.2},{"time":1780272000,"o":73653.2,"h":74070.5,"l":70650.9,"c":71391.5},{"time":1780358400,"o":71391.5,"h":71397,"l":66150.7,"c":66730},{"time":1780444800,"o":66730.1,"h":67493.8,"l":64050.8,"c":64117.7},{"time":1780531200,"o":64117.7,"h":64739.8,"l":61344.8,"c":63853.4},{"time":1780617600,"o":63853.4,"h":63955,"l":59080,"c":61022},{"time":1780704000,"o":61022,"h":61500,"l":59451.3,"c":60849.7},{"time":1780790400,"o":60849.7,"h":64250,"l":60708,"c":63298.5},{"time":1780876800,"o":63299,"h":64179.5,"l":62377,"c":63057.9},{"time":1780963200,"o":63057.9,"h":63499.9,"l":60755,"c":61695},{"time":1781049600,"o":61694.9,"h":62840.2,"l":60691.9,"c":61483.7},{"time":1781136000,"o":61483.6,"h":63915.3,"l":61483.6,"c":63597.9},{"time":1781222400,"o":63598,"h":64362.6,"l":62800,"c":63547},{"time":1781308800,"o":63547,"h":64738,"l":63360,"c":64418.2},{"time":1781395200,"o":64418.3,"h":65775,"l":63650,"c":65702.1},{"time":1781481600,"o":65702.1,"h":67255.4,"l":65314.3,"c":66285.9},{"time":1781568000,"o":66285.9,"h":66956.7,"l":65328.8,"c":65644.8},{"time":1781654400,"o":65644.8,"h":66419.2,"l":63881.2,"c":64472.9},{"time":1781740800,"o":64472.9,"h":64780,"l":62232.1,"c":62924.1},{"time":1781827200,"o":62924,"h":63645,"l":62237.2,"c":63512.6},{"time":1781913600,"o":63512.5,"h":64370.9,"l":63136.2,"c":64270},{"time":1782000000,"o":64270.1,"h":64568,"l":63220,"c":63287.1},{"time":1782086400,"o":63287.2,"h":65597.2,"l":63286.2,"c":63990.2},{"time":1782172800,"o":63990.1,"h":64247.2,"l":61870,"c":62696.7},{"time":1782259200,"o":62696.7,"h":63209.6,"l":59060,"c":61051.2},{"time":1782345600,"o":61051.2,"h":61931.1,"l":58030,"c":59771.9},{"time":1782432000,"o":59772,"h":60734,"l":58288,"c":60072},{"time":1782518400,"o":60071.9,"h":60924.7,"l":59819.8,"c":60000.3},{"time":1782604800,"o":60000.4,"h":60543.3,"l":58888,"c":59550.2},{"time":1782691200,"o":59550.2,"h":60758.3,"l":58850,"c":60224.7},{"time":1782777600,"o":60224.7,"h":60250,"l":58160,"c":58605.4},{"time":1784592000,"o":65224.7,"h":66924.1,"l":65115.3,"c":66522.4}];
 
-chart=LightweightCharts.createChart(document.getElementById('ct'),{layout:{textColor:'#8b949e',background:{color:'#0d1117'}},grid:{vertLines:{color:'#161b22'},horzLines:{color:'#161b22'}},timeScale:{borderColor:'#30363d',timeVisible:true,secondsVisible:false}});
-cs=chart.addCandlestickSeries({upColor:'#3fb950',downColor:'#f85149',borderVisible:false,wickUpColor:'#3fb950',wickDownColor:'#f85149'});
-l7=chart.addLineSeries({color:'#f0883e',lineWidth:1,priceLineVisible:false});
-l25=chart.addLineSeries({color:'#ffd700',lineWidth:1,priceLineVisible:false});
-l99=chart.addLineSeries({color:'#ff6b9d',lineWidth:1,priceLineVisible:false});
-bu=chart.addLineSeries({color:'#8b5cf6',lineWidth:1,priceLineVisible:false});
-bm=chart.addLineSeries({color:'#8b5cf6',lineWidth:1,priceLineVisible:false,lineStyle:2});
-bl=chart.addLineSeries({color:'#8b5cf6',lineWidth:1,priceLineVisible:false});
-rp=chart.addPane();rs=chart.addLineSeries({color:'#22d3ee',lineWidth:1,priceLineVisible:false,pane:rp});
-chart.paneHeight(rp,0);
+var c=LightweightCharts.createChart(document.getElementById('ct'),{layout:{textColor:'#8b949e',background:{color:'#0d1117'}},grid:{vertLines:{color:'#161b22'},horzLines:{color:'#161b22'}},timeScale:{borderColor:'#30363d',timeVisible:true,secondsVisible:false}});
+var cs=c.addCandlestickSeries({upColor:'#3fb950',downColor:'#f85149',borderVisible:false,wickUpColor:'#3fb950',wickDownColor:'#f85149'});
+var l7=c.addLineSeries({color:'#f0883e',lineWidth:1,priceLineVisible:false});
+var l25=c.addLineSeries({color:'#ffd700',lineWidth:1,priceLineVisible:false});
+var l99=c.addLineSeries({color:'#ff6b9d',lineWidth:1,priceLineVisible:false});
+var bu=c.addLineSeries({color:'#8b5cf6',lineWidth:1,priceLineVisible:false});
+var bm=c.addLineSeries({color:'#8b5cf6',lineWidth:1,priceLineVisible:false,lineStyle:2});
+var bl=c.addLineSeries({color:'#8b5cf6',lineWidth:1,priceLineVisible:false});
+var rp=c.addPane();
+var rs=c.addLineSeries({color:'#22d3ee',lineWidth:1,priceLineVisible:false,pane:rp});
+c.paneHeight(rp,0);
 
-function sma(d,p){var r=[];for(var i=p-1;i<d.length;i++){var s=0;for(var j=0;j<p;j++)s+=d[i-j].close;r.push({time:d[i].time,value:s/p});}return r;}
-function bb(d,p,k){var m=sma(d,p),u=[],l=[];for(var i=0;i<m.length;i++){var z=i+p-1,su=0;for(var j=0;j<p;j++)su+=Math.pow(d[z-j].close-m[i].value,2);var sd=Math.sqrt(su/p);u.push({time:m[i].time,value:m[i].value+k*sd});l.push({time:m[i].time,value:m[i].value-k*sd});}return{mid:m,upper:u,lower:l};}
-function rsi(d,p){var r=[];for(var i=p;i<d.length;i++){var g=0,ls=0;for(var j=i-p+1;j<=i;j++){var ch=d[j].close-d[j-1].close;if(ch>0)g+=ch;else ls-=ch;}var ag=g/p,al=ls/p;if(al===0){r.push({time:d[i].time,value:100});continue;}r.push({time:d[i].time,value:100-100/(1+ag/al)});}return r;}
+function S(d,p){var r=[];for(var i=p-1;i<d.length;i++){var s=0;for(var j=0;j<p;j++)s+=d[i-j].c;r.push({time:d[i].time,value:s/p});}return r;}
+function B(d,p,k){var m=S(d,p),u=[],l=[];for(var i=0;i<m.length;i++){var z=i+p-1,su=0;for(var j=0;j<p;j++)su+=Math.pow(d[z-j].c-m[i].value,2);var sd=Math.sqrt(su/p);u.push({time:m[i].time,value:m[i].value+k*sd});l.push({time:m[i].time,value:m[i].value-k*sd});}return{mid:m,upper:u,lower:l};}
+function R(d,p){var r=[];for(var i=p;i<d.length;i++){var g=0,ls=0;for(var j=i-p+1;j<=i;j++){var ch=d[j].c-d[j-1].c;if(ch>0)g+=ch;else ls-=ch;}var ag=g/p,al=ls/p;if(al===0){r.push({time:d[i].time,value:100});continue;}r.push({time:d[i].time,value:100-100/(1+ag/al)});}return r;}
 
-function load(k){
-  dd=k.map(function(c){return{time:Math.floor(c[0]/1000),open:+c[1],high:+c[2],low:+c[3],close:+c[4]};});
-  cs.setData(dd);
-  var s7=sma(dd,7),s25=sma(dd,25),s99=sma(dd,99);
-  l7.setData(s7);l25.setData(s25);l99.setData(s99);
-  var b=bb(dd,20,2);bu.setData(b.upper);bm.setData(b.mid);bl.setData(b.lower);
-  var r=rsi(dd,14);rs.setData(r);
-  if(r.length)chart.paneHeight(rp,document.getElementById('rsi').checked?80:0);
-  l7.applyOptions({visible:document.getElementById('s7').checked});
-  l25.applyOptions({visible:document.getElementById('s25').checked});
-  l99.applyOptions({visible:document.getElementById('s99').checked});
-  [bu,bm,bl].forEach(function(s){s.applyOptions({visible:document.getElementById('bb').checked});});
-  rs.applyOptions({visible:document.getElementById('rsi').checked});
-  chart.timeScale().fitContent();
-  var ls=dd[dd.length-1],pr=dd.length>1?dd[dd.length-2].close:ls.close;
-  var ch=(ls.close-pr)/pr*100;
-  document.getElementById('p').textContent='$'+ls.close.toLocaleString();
+function go(data){
+  cs.setData(data.map(function(x){return{time:x.time,open:x.o,high:x.h,low:x.l,close:x.c};}));
+  var s7=S(data,7),s25=S(data,25),s99=S(data,99);l7.setData(s7);l25.setData(s25);l99.setData(s99);
+  var bb=B(data,20,2);bu.setData(bb.upper);bm.setData(bb.mid);bl.setData(bb.lower);
+  var rsi=R(data,14);rs.setData(rsi);
+  if(rsi.length)c.paneHeight(rp,document.getElementById('e').checked?80:0);
+  l7.applyOptions({visible:document.getElementById('a').checked});
+  l25.applyOptions({visible:document.getElementById('b').checked});
+  l99.applyOptions({visible:document.getElementById('c').checked});
+  [bu,bm,bl].forEach(function(s){s.applyOptions({visible:document.getElementById('d').checked});});
+  rs.applyOptions({visible:document.getElementById('e').checked});
+  c.timeScale().fitContent();
+  var lst=data[data.length-1],prv=data.length>1?data[data.length-2].c:lst.c;
+  var ch=(lst.c-prv)/prv*100;
+  document.getElementById('p').textContent='$'+lst.c.toLocaleString();
   document.getElementById('c').textContent=(ch>0?'+':'')+ch.toFixed(2)+'%';
   document.getElementById('c').className=ch>=0?'g':'r';
 }
 
-fetch(url).then(function(r){return r.json();}).then(load).catch(function(){document.getElementById('p').textContent='Hata';});
+go(DATA);
 
-['s7','s25','s99','bb','rsi'].forEach(function(id){
+['a','b','c','d','e'].forEach(function(id){
   document.getElementById(id).onchange=function(){
-    if(!dd.length)return;
-    l7.applyOptions({visible:document.getElementById('s7').checked});
-    l25.applyOptions({visible:document.getElementById('s25').checked});
-    l99.applyOptions({visible:document.getElementById('s99').checked});
-    [bu,bm,bl].forEach(function(s){s.applyOptions({visible:document.getElementById('bb').checked});});
-    rs.applyOptions({visible:document.getElementById('rsi').checked});
-    if(id==='rsi')chart.paneHeight(rp,document.getElementById('rsi').checked?80:0);
-  };
-});
-
-document.querySelectorAll('.t button').forEach(function(b){
-  b.onclick=function(){
-    document.querySelectorAll('.t button').forEach(function(x){x.classList.remove('on');});
-    b.classList.add('on');
-    var m={1d:365,1h:168,1m:720}[b.dataset.i];
-    var i={1d:'1d',1h:'1h',1m:'1m'}[b.dataset.i];
-    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval='+i+'&limit='+m).then(function(r){return r.json();}).then(load);
+    l7.applyOptions({visible:document.getElementById('a').checked});
+    l25.applyOptions({visible:document.getElementById('b').checked});
+    l99.applyOptions({visible:document.getElementById('c').checked});
+    [bu,bm,bl].forEach(function(s){s.applyOptions({visible:document.getElementById('d').checked});});
+    rs.applyOptions({visible:document.getElementById('e').checked});
+    if(id==='e')c.paneHeight(rp,document.getElementById('e').checked?80:0);
   };
 });
 
@@ -109,7 +98,7 @@ ws.onmessage=function(e){try{
 }catch(e2){}};
 ws.onclose=function(){setTimeout(function(){ws=new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');},3000);};
 
-window.onresize=function(){chart.applyOptions({width:window.innerWidth,height:window.innerHeight-65});};
+window.onresize=function(){c.applyOptions({width:window.innerWidth,height:window.innerHeight-62});};
 </script>
 </body>
 </html>
