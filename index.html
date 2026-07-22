@@ -37,7 +37,11 @@ body{background:#0d1117;color:#c9d1d9;font-family:system-ui;overflow:hidden}
   <span>MP:<b id="mp">--</b></span>
 </div>
 <div id="panel-bar"></div>
-<div id="ct"><div id="tip"></div></div>
+<div id="ct">
+  <div id="tip"></div>
+  <div id="volLabel" style="position:absolute;bottom:30%;left:4px;background:#161b22;border:1px solid #30363d;border-radius:4px;padding:1px 6px;font-size:8px;color:#26a69a;display:flex;align-items:center;gap:6px;z-index:5">📊 Volume <span class="x" style="color:#f85149;cursor:pointer;font-size:10px" onclick="togglePanel('vol')">✕</span></div>
+  <div id="delLabel" style="position:absolute;bottom:12%;left:4px;background:#161b22;border:1px solid #30363d;border-radius:4px;padding:1px 6px;font-size:8px;color:#ef5350;display:flex;align-items:center;gap:6px;z-index:5">📉 Delta <span class="x" style="color:#f85149;cursor:pointer;font-size:10px" onclick="togglePanel('del')">✕</span></div>
+</div>
 
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
@@ -114,6 +118,13 @@ function initC(){
     var x=Math.min(p.point.x,window.innerWidth-150), y=Math.min(p.point.y,window.innerHeight-200);
     tip.style.cssText='display:block;position:absolute;left:'+Math.max(5,x)+'px;top:'+Math.max(5,y-10)+'px';
   });
+}
+
+function togglePanel(p){
+  panels[p] = !panels[p];
+  document.getElementById(p+'Label').style.display = panels[p] ? 'flex' : 'none';
+  updPanelBar();
+  resizeChart();
 }
 
 function resizeChart(){
