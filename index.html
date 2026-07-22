@@ -10,10 +10,13 @@ body{margin:0;background:#0d1117;color:#c9d1d9;font-family:system-ui;overflow:hi
 .h h2{color:#e94560;font-size:13px;margin:0}
 #p{font-size:18px;font-weight:700}
 .g{color:#3fb950}.r{color:#f85149}
-.t{display:flex;gap:3px;margin-left:auto}
-.t button{background:#21262d;border:1px solid #30363d;color:#8b949e;padding:2px 8px;border-radius:3px;cursor:pointer;font-size:10px}
-.t button.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
-#ct{width:100%;height:calc(100vh - 38px)}
+.ctrl{display:flex;gap:3px;flex-wrap:wrap;align-items:center}
+.ctrl button{background:#21262d;border:1px solid #30363d;color:#8b949e;padding:2px 8px;border-radius:3px;cursor:pointer;font-size:10px}
+.ctrl button.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
+.ind{display:flex;gap:4px;flex-wrap:wrap;font-size:10px}
+.ind label{display:flex;align-items:center;gap:3px;cursor:pointer;padding:2px 6px;border-radius:3px;background:#161b22;border:1px solid #30363d}
+.ind input{margin:0}
+#ct{width:100%;height:calc(100vh - 60px)}
 </style>
 </head>
 <body>
@@ -21,11 +24,19 @@ body{margin:0;background:#0d1117;color:#c9d1d9;font-family:system-ui;overflow:hi
   <h2>🐉 BTC</h2>
   <span id="p">--</span>
   <span id="ch"></span>
-  <span style="font-size:10px;color:#8b949e" id="ind">SMA 7 25 99</span>
-  <div class="t">
+  <div class="ctrl">
     <button data-t="daily" class="on">Günlük</button>
-    <button data-t="1h">1 saat</button>
-    <button data-t="1m">1 dk</button>
+    <button data-t="1h">1s</button>
+    <button data-t="1m">1dk</button>
+  </div>
+</div>
+<div style="background:#161b22;padding:4px 12px;border-bottom:1px solid #30363d">
+  <div class="ind">
+    <label style="border-left:3px solid #f0883e"><input type="checkbox" id="c7" checked> SMA 7</label>
+    <label style="border-left:3px solid #ffd700"><input type="checkbox" id="c25" checked> SMA 25</label>
+    <label style="border-left:3px solid #ff6b9d"><input type="checkbox" id="c99" checked> SMA 99</label>
+    <label style="border-left:3px solid #8b5cf6"><input type="checkbox" id="cBB"> Bollinger</label>
+    <label style="border-left:3px solid #22d3ee"><input type="checkbox" id="cRSI"> RSI</label>
   </div>
 </div>
 <div id="ct"></div>
@@ -40,30 +51,100 @@ var series = chart.addCandlestickSeries({
   wickUpColor:'#3fb950',wickDownColor:'#f85149',
 });
 
-// Indicator lines
+// SMA lines
 var sma7 = chart.addLineSeries({color:'#f0883e',lineWidth:1,priceLineVisible:false});
 var sma25 = chart.addLineSeries({color:'#ffd700',lineWidth:1,priceLineVisible:false});
 var sma99 = chart.addLineSeries({color:'#ff6b9d',lineWidth:1,priceLineVisible:false});
 
-var lastClose = 0;
+// Bollinger Bands
+var bbUpper = chart.addLineSeries({color:'#8b5cf6',lineWidth:1,priceLineVisible:false});
+var bbMid = chart.addLineSeries({color:'#8b5cf6',lineWidth:1,priceLineVisible:false,lineStyle:2});
+var bbLower = chart.addLineSeries({color:'#8b5cf6',lineWidth:1,priceLineVisible:false});
 
-function calcSMA(data, period){
-  var result = [];
-  for(var i=period-1; i<data.length; i++){
-    var sum = 0;
-    for(var j=0; j<period; j++) sum += data[i-j].close;
-    result.push({time: data[i].time, value: sum/period});
+// RSI in a separate pane
+var rsiPane = chart.addPane();
+var rsiSeries = chart.addLineSeries({color:'#22d3ee',lineWidth:1,priceLineVisible:false,pane:rsiPane});
+chart.paneHeight(rsiPane, 0); // hidden by default
+
+var lastClose = 0, currentData = [];
+
+function calcSMA(data, p){
+  var r=[];
+  for(var i=p-1;i<data.length;i++){
+    var s=0; for(var j=0;j<p;j++) s+=data[i-j].close;
+    r.push({time:data[i].time,value:s/p});
   }
-  return result;
+  return r;
+}
+
+function calcBB(data, p, k){
+  var mid = calcSMA(data, p);
+  var r=[], ru=[], rl=[];
+  for(var i=0;i<mid.length;i++){
+    var idx = i + p - 1;
+    var sum=0;
+    for(var j=0;j<p;j++) sum += Math.pow(data[idx-j].close - mid[i].value,2);
+    var std = Math.sqrt(sum/p);
+    r.push(mid[i]);
+    ru.push({time:mid[i].time, value:mid[i].value + k*std});
+    rl.push({time:mid[i].time, value:mid[i].value - k*std});
+  }
+  return {mid:r, upper:ru, lower:rl};
+}
+
+function calcRSI(data, p){
+  if(data.length < p+1) return [];
+  var r = [];
+  for(var i=p;i<data.length;i++){
+    var gain=0, loss=0;
+    for(var j=i-p+1;j<=i;j++){
+      var ch = data[j].close - data[j-1].close;
+      if(ch>0) gain+=ch; else loss-=ch;
+    }
+    var avgG = gain/p, avgL = loss/p;
+    if(avgL===0){ r.push({time:data[i].time,value:100}); continue; }
+    var rs = avgG/avgL;
+    r.push({time:data[i].time, value:100 - 100/(1+rs)});
+  }
+  return r;
+}
+
+function setIndVisible(s, vis){
+  s.applyOptions({visible:vis});
+}
+
+function renderIndicators(data){
+  currentData = data;
+  
+  var sma7d = calcSMA(data,7);
+  var sma25d = calcSMA(data,25);
+  var sma99d = calcSMA(data,99);
+  sma7.setData(sma7d); sma25.setData(sma25d); sma99.setData(sma99d);
+  
+  var bb = calcBB(data,20,2);
+  bbUpper.setData(bb.upper); bbMid.setData(bb.mid); bbLower.setData(bb.lower);
+  
+  var rsi = calcRSI(data,14);
+  rsiSeries.setData(rsi);
+  if(rsi.length){
+    chart.paneHeight(rsiPane, document.getElementById('cRSI').checked ? 80 : 0);
+  }
+  
+  // Apply visibility
+  setIndVisible(sma7, document.getElementById('c7').checked);
+  setIndVisible(sma25, document.getElementById('c25').checked);
+  setIndVisible(sma99, document.getElementById('c99').checked);
+  setIndVisible(bbUpper, document.getElementById('cBB').checked);
+  setIndVisible(bbMid, document.getElementById('cBB').checked);
+  setIndVisible(bbLower, document.getElementById('cBB').checked);
+  setIndVisible(rsiSeries, document.getElementById('cRSI').checked);
 }
 
 function loadDaily(){
   fetch('data/btc_daily.json').then(function(r){return r.json();}).then(function(d){
     var data = d.map(function(c){return {time:c.time, open:c.open, high:c.high, low:c.low, close:c.close};});
     series.setData(data);
-    sma7.setData(calcSMA(data,7));
-    sma25.setData(calcSMA(data,25));
-    sma99.setData(calcSMA(data,99));
+    renderIndicators(data);
     chart.timeScale().fitContent();
     updatePrice(data);
   });
@@ -72,41 +153,43 @@ function loadDaily(){
 function loadHourly(){
   fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=200').then(function(r){return r.json();}).then(function(k){
     var data = k.map(function(c){return {time:Math.floor(c[0]/1000), open:+c[1], high:+c[2], low:+c[3], close:+c[4]};});
-    series.setData(data);
-    sma7.setData(calcSMA(data,7));
-    sma25.setData(calcSMA(data,25));
-    sma99.setData(calcSMA(data,99));
-    chart.timeScale().fitContent();
-    updatePrice(data);
+    series.setData(data); renderIndicators(data);
+    chart.timeScale().fitContent(); updatePrice(data);
   }).catch(function(){loadDaily();});
 }
 
 function loadMinute(){
   fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=1440').then(function(r){return r.json();}).then(function(k){
     var data = k.map(function(c){return {time:Math.floor(c[0]/1000), open:+c[1], high:+c[2], low:+c[3], close:+c[4]};});
-    series.setData(data);
-    sma7.setData(calcSMA(data,7));
-    sma25.setData(calcSMA(data,25));
-    sma99.setData(calcSMA(data,99));
-    chart.timeScale().fitContent();
-    updatePrice(data);
+    series.setData(data); renderIndicators(data);
+    chart.timeScale().fitContent(); updatePrice(data);
   }).catch(function(){loadDaily();});
 }
 
 function updatePrice(data){
   if(!data||!data.length) return;
-  var last = data[data.length-1];
-  var prev = data.length>1 ? data[data.length-2].close : last.close;
-  var ch = (last.close-prev)/prev*100;
-  document.getElementById('p').textContent = '$'+last.close.toLocaleString();
-  document.getElementById('ch').textContent = (ch>0?'+':'')+ch.toFixed(2)+'%';
-  document.getElementById('ch').className = ch>=0?'g':'r';
-  lastClose = last.close;
+  var last=data[data.length-1], prev=data.length>1?data[data.length-2].close:last.close;
+  var ch=(last.close-prev)/prev*100;
+  document.getElementById('p').textContent='$'+last.close.toLocaleString();
+  document.getElementById('ch').textContent=(ch>0?'+':'')+ch.toFixed(2)+'%';
+  document.getElementById('ch').className=ch>=0?'g':'r';
+  lastClose=last.close;
 }
 
-document.querySelectorAll('.t button').forEach(function(b){
+// Checkbox events
+['c7','c25','c99','cBB','cRSI'].forEach(function(id){
+  document.getElementById(id).onchange = function(){
+    if(currentData.length) renderIndicators(currentData);
+    if(id==='cRSI'){
+      var h = document.getElementById('cRSI').checked ? 80 : 0;
+      chart.paneHeight(rsiPane, h);
+    }
+  };
+});
+
+document.querySelectorAll('.ctrl button').forEach(function(b){
   b.onclick = function(){
-    document.querySelectorAll('.t button').forEach(function(x){x.classList.remove('on');});
+    document.querySelectorAll('.ctrl button').forEach(function(x){x.classList.remove('on');});
     b.classList.add('on');
     if(b.dataset.t==='daily') loadDaily();
     else if(b.dataset.t==='1h') loadHourly();
@@ -116,21 +199,16 @@ document.querySelectorAll('.t button').forEach(function(b){
 
 var ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
 ws.onmessage = function(e){
-  try{
-    var d=JSON.parse(e.data), p=parseFloat(d.p);
-    document.getElementById('p').textContent = '$'+p.toLocaleString();
-    if(lastClose){
-      var ch = (p-lastClose)/lastClose*100;
-      document.getElementById('ch').textContent = (ch>0?'+':'')+ch.toFixed(2)+'%';
-      document.getElementById('ch').className = ch>=0?'g':'r';
-    }
+  try{var d=JSON.parse(e.data),p=parseFloat(d.p);
+    document.getElementById('p').textContent='$'+p.toLocaleString();
+    if(lastClose){var ch=(p-lastClose)/lastClose*100;
+      document.getElementById('ch').textContent=(ch>0?'+':'')+ch.toFixed(2)+'%';
+      document.getElementById('ch').className=ch>=0?'g':'r';}
   }catch(e2){}
 };
-ws.onclose = function(){setTimeout(function(){
-  ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
-},3000);};
+ws.onclose = function(){setTimeout(function(){ws=new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');},3000);};
 
-window.onresize = function(){chart.applyOptions({width:window.innerWidth, height:window.innerHeight-38});};
+window.onresize = function(){chart.applyOptions({width:window.innerWidth,height:window.innerHeight-60});};
 
 loadDaily();
 </script>
