@@ -1,45 +1,44 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HOVA | BTC/USDT Canlı</title>
+<title>HOVA | BTC</title>
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0d1117;color:#c9d1d9;font-family:'Segoe UI',sans-serif}
-.header{background:#161b22;padding:10px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #30363d;flex-wrap:wrap}
-.header h1{font-size:16px;color:#e94560}
-#priceDisplay{font-size:22px;font-weight:bold}
-#change{font-size:14px}#change.green{color:#3fb950}#change.red{color:#f85149}
-#chart{width:100%;height:calc(100vh - 110px)}
-.controls{display:flex;gap:6px;margin-left:auto}
-.tf-btn{background:#21262d;border:1px solid #30363d;color:#8b949e;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px}
-.tf-btn.active{background:#1f6feb;border-color:#1f6feb;color:#fff}
-.tf-btn:hover{background:#30363d}
-.info-bar{background:#161b22;padding:6px 20px;display:flex;gap:20px;font-size:12px;color:#8b949e;border-bottom:1px solid #30363d}
-.info-bar span b{color:#c9d1d9}
+body{background:#0d1117;color:#c9d1d9;font-family:system-ui,sans-serif;overflow:hidden}
+.header{background:#161b22;padding:8px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #30363d;flex-wrap:wrap}
+.header h1{font-size:14px;color:#e94560}
+#priceD{font-size:20px;font-weight:700}
+.green{color:#3fb950}.red{color:#f85149}
+.tf{display:flex;gap:4px;margin-left:auto}
+.tf button{background:#21262d;border:1px solid #30363d;color:#8b949e;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px}
+.tf button.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
+#chart{width:100%;height:calc(100vh - 80px)}
+.info{display:flex;gap:12px;font-size:11px;color:#8b949e;padding:4px 16px;background:#161b22;border-bottom:1px solid #30363d;flex-wrap:wrap}
+.info span b{color:#c9d1d9}
 </style>
 </head>
 <body>
 <div class="header">
   <h1>🐉 HOVA | BTC/USDT</h1>
-  <span id="priceDisplay">---</span>
-  <span id="change"></span>
-  <div class="controls">
-    <button class="tf-btn" data-tf="1m">1m</button>
-    <button class="tf-btn active" data-tf="5m">5m</button>
-    <button class="tf-btn" data-tf="15m">15m</button>
-    <button class="tf-btn" data-tf="1h">1h</button>
-    <button class="tf-btn" data-tf="4h">4h</button>
-    <button class="tf-btn" data-tf="1d">1d</button>
+  <span id="priceD">--</span>
+  <span id="chg"></span>
+  <div class="tf" id="tfBtns">
+    <button data-s="1">1sn</button>
+    <button data-s="5" class="on">5sn</button>
+    <button data-s="15">15sn</button>
+    <button data-s="60">1dk</button>
+    <button data-s="300">5dk</button>
+    <button data-s="3600">1s</button>
   </div>
 </div>
-<div class="info-bar">
-  <span>Yüksek: <b id="high24h">--</b></span>
-  <span>Düşük: <b id="low24h">--</b></span>
-  <span>Hacim: <b id="vol24h">--</b></span>
-  <span>Funding: <b id="funding">--</b></span>
+<div class="info">
+  <span>H24: <b id="h24">--</b></span>
+  <span>L24: <b id="l24">--</b></span>
+  <span>Vol: <b id="v24">--</b></span>
+  <span>Funding: <b id="fd">--</b></span>
   <span>OI: <b id="oi">--</b></span>
   <span>L/S: <b id="ls">--</b></span>
 </div>
@@ -49,142 +48,158 @@ body{background:#0d1117;color:#c9d1d9;font-family:'Segoe UI',sans-serif}
 const chart = LightweightCharts.createChart(document.getElementById('chart'), {
   layout:{textColor:'#8b949e',background:{type:'solid',color:'#0d1117'}},
   grid:{vertLines:{color:'#161b22'},horzLines:{color:'#161b22'}},
-  rightPriceScale:{borderColor:'#30363d',scaleMargins:{top:0.1,bottom:0.3}},
-  timeScale:{borderColor:'#30363d',timeVisible:true,secondsVisible:false},
-  crosshair:{mode:LightweightCharts.CrosshairMode.Normal},
+  rightPriceScale:{borderColor:'#30363d'},
+  timeScale:{borderColor:'#30363d',timeVisible:true,secondsVisible:true},
 });
-
-const candleSeries = chart.addCandlestickSeries({
+const mainSeries = chart.addCandlestickSeries({
   upColor:'#3fb950',downColor:'#f85149',borderVisible:false,
   wickUpColor:'#3fb950',wickDownColor:'#f85149',
 });
 
-const volumeSeries = chart.addHistogramSeries({
-  priceFormat:{type:'volume'},priceScaleId:'volume',
-});
-chart.priceScale('volume').applyOptions({scaleMargins:{top:0.85,bottom:0}});
+let candleSec = 5; // default 5-second candles
+let candles = {}; // time -> {time,open,high,low,close}
+let loaded = false;
 
-let currentTF = '5m';
-let currentData = [];
-let ws = null;
-
-// --- Timeframe buttons ---
-document.querySelectorAll('.tf-btn').forEach(btn => {
-  btn.onclick = () => {
-    document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentTF = btn.dataset.tf;
-    loadHistorical(currentTF);
-  };
-});
-
-// --- Load historical data with timeframe ---
-async function loadHistorical(tf) {
-  const intervalMap = {'1m':'1','5m':'5','15m':'15','1h':'60','4h':'240','1d':'D'};
-  const interval = intervalMap[tf] || '5';
-  
-  const api = `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=500`;
+// Binance REST API via HTTPS (CORS-friendly)
+async function loadInit() {
   try {
-    const r = await fetch(api);
+    const r = await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=100');
     const data = await r.json();
-    
-    const candles = data.map(k => ({
-      time: Math.floor(k[0] / 1000),
-      open: parseFloat(k[1]),
-      high: parseFloat(k[2]),
-      low: parseFloat(k[3]),
-      close: parseFloat(k[4]),
+    const list = data.map(k => ({
+      time: Math.floor(k[0]/1000),
+      open: +k[1], high: +k[2], low: +k[3], close: +k[4],
+      vol: +k[5]
     }));
     
-    const volumes = data.map(k => ({
-      time: Math.floor(k[0] / 1000),
-      value: parseFloat(k[5]),
-      color: parseFloat(k[4]) >= parseFloat(k[1]) ? 'rgba(63,185,80,0.3)' : 'rgba(248,81,73,0.3)',
-    }));
+    // Seed candles from 1m data (convert to our candle resolution)
+    for (const c of list) {
+      const key = Math.floor(c.time / candleSec) * candleSec;
+      if (!candles[key]) {
+        candles[key] = {time: key, open: c.open, high: c.high, low: c.low, close: c.close};
+      } else {
+        const x = candles[key];
+        x.high = Math.max(x.high, c.high);
+        x.low = Math.min(x.low, c.low);
+        x.close = c.close;
+      }
+    }
     
-    candleSeries.setData(candles);
-    volumeSeries.setData(volumes);
+    // Set chart data
+    const sorted = Object.values(candles).sort((a,b) => a.time - b.time);
+    mainSeries.setData(sorted);
     chart.timeScale().fitContent();
-    currentData = candles;
     
-    // Update price
-    const last = candles[candles.length - 1];
-    updatePrice(last.close, last.open);
+    // Update info
+    const last = list[list.length-1];
+    document.getElementById('priceD').textContent = '$'+last.close.toLocaleString();
+    const ch = (last.close - last.open)/last.open*100;
+    document.getElementById('chg').textContent = (ch>=0?'+':'')+ch.toFixed(2)+'%';
+    document.getElementById('chg').className = ch>=0?'green':'red';
+    
+    loaded = true;
   } catch(e) {
-    console.error('Historical load error:', e);
+    document.getElementById('priceD').textContent = 'Yükleniyor...';
   }
 }
 
-// --- Update price display ---
-function updatePrice(price, open) {
-  document.getElementById('priceDisplay').textContent = '$' + Number(price).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
-  const change = ((price - open) / open * 100);
-  const el = document.getElementById('change');
-  el.textContent = (change >= 0 ? '+' : '') + change.toFixed(2) + '%';
-  el.className = change >= 0 ? 'green' : 'red';
+// WebSocket - real-time trades
+let ws = null;
+function wsConnect() {
+  if(ws) ws.close();
+  ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
+  
+  ws.onmessage = e => {
+    const d = JSON.parse(e.data);
+    const p = +d.p; // price
+    const q = +d.q; // quantity
+    const t = Math.floor(d.T / 1000); // trade time in seconds
+    
+    // Aggregate into our candle resolution
+    const key = Math.floor(t / candleSec) * candleSec;
+    
+    if (!candles[key]) {
+      candles[key] = {time: key, open: p, high: p, low: p, close: p};
+    } else {
+      const c = candles[key];
+      c.high = Math.max(c.high, p);
+      c.low = Math.min(c.low, p);
+      c.close = p;
+    }
+    
+    // Update chart
+    const c = candles[key];
+    mainSeries.update(c);
+    
+    // Update price display (live)
+    document.getElementById('priceD').textContent = '$'+p.toLocaleString();
+    
+    // Get previous close for change calculation
+    const keys = Object.keys(candles).sort();
+    const idx = keys.indexOf(String(key));
+    const prevClose = idx > 0 ? candles[keys[idx-1]].close : p;
+    const ch = (p - prevClose) / prevClose * 100;
+    document.getElementById('chg').textContent = (ch>=0?'+':'')+ch.toFixed(2)+'%';
+    document.getElementById('chg').className = ch>=0?'green':'red';
+  };
+  
+  ws.onclose = () => setTimeout(wsConnect, 1000);
+  ws.onerror = () => ws.close();
 }
 
-// --- Futures data (every 30s) ---
+// Futures data (30s)
 async function loadFutures() {
   try {
-    const [oiR, fundingR, lsR, tickerR] = await Promise.all([
+    const [oiR, frR, lsR, tR] = await Promise.all([
       fetch('https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT'),
       fetch('https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1'),
       fetch('https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=BTCUSDT&period=1d'),
       fetch('https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT'),
     ]);
-    
-    const oi = await oiR.json();
-    const funding = await fundingR.json();
-    const ls = await lsR.json();
-    const ticker = await tickerR.json();
-    
-    document.getElementById('oi').textContent = (parseFloat(oi.openInterest) / 1000).toFixed(1) + 'K';
-    document.getElementById('funding').textContent = (parseFloat(funding[0]?.fundingRate || 0) * 100).toFixed(4) + '%';
-    document.getElementById('ls').textContent = parseFloat(ls[0]?.longShortRatio || 1).toFixed(2);
-    document.getElementById('high24h').textContent = '$' + parseFloat(ticker.highPrice).toLocaleString();
-    document.getElementById('low24h').textContent = '$' + parseFloat(ticker.lowPrice).toLocaleString();
-    document.getElementById('vol24h').textContent = (parseFloat(ticker.quoteVolume) / 1e9).toFixed(2) + 'B';
+    const [oi, fr, ls, t] = await Promise.all([oiR.json(), frR.json(), lsR.json(), tR.json()]);
+    document.getElementById('h24').textContent = '$'+parseFloat(t.highPrice).toLocaleString();
+    document.getElementById('l24').textContent = '$'+parseFloat(t.lowPrice).toLocaleString();
+    document.getElementById('v24').textContent = (parseFloat(t.quoteVolume)/1e9).toFixed(2)+'B';
+    document.getElementById('fd').textContent = (parseFloat(fr[0]?.fundingRate||0)*100).toFixed(4)+'%';
+    document.getElementById('oi').textContent = (parseFloat(oi.openInterest)/1000).toFixed(1)+'K';
+    document.getElementById('ls').textContent = parseFloat(ls[0]?.longShortRatio||1).toFixed(2);
   } catch(e) {}
 }
 
-// --- WebSocket real-time ---
-function connectWS() {
-  if (ws) ws.close();
-  ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
-  
-  ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    const price = parseFloat(data.p);
-    const qty = parseFloat(data.q);
-    const time = Math.floor(data.T / 1000);
+// Timeframe buttons
+document.querySelectorAll('.tf button').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.tf button').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    candleSec = parseInt(btn.dataset.s);
     
-    // Update price
-    updatePrice(price, currentData.length > 0 ? currentData[currentData.length - 1].open : price);
-    
-    // Real-time update to chart (update last candle)
-    if (currentData.length > 0) {
-      const last = currentData[currentData.length - 1];
-      last.high = Math.max(last.high, price);
-      last.low = Math.min(last.low, price);
-      last.close = price;
-      candleSeries.update(last);
+    // Re-bin existing data
+    const oldCandles = Object.values(candles);
+    candles = {};
+    for (const c of oldCandles) {
+      const key = Math.floor(c.time / candleSec) * candleSec;
+      if (!candles[key]) {
+        candles[key] = {...c, time: key};
+      } else {
+        const x = candles[key];
+        x.high = Math.max(x.high, c.high);
+        x.low = Math.min(x.low, c.low);
+        x.close = c.close;
+      }
     }
+    const sorted = Object.values(candles).sort((a,b) => a.time - b.time);
+    mainSeries.setData(sorted);
+    chart.timeScale().fitContent();
   };
-  
-  ws.onclose = () => { setTimeout(connectWS, 1000); };
-  ws.onerror = () => { ws.close(); };
-}
+});
 
-// --- Init ---
-loadHistorical('5m');
+// Init
+loadInit();
 loadFutures();
 setInterval(loadFutures, 30000);
-connectWS();
+wsConnect();
 
-// Resize
 window.addEventListener('resize', () => {
-  chart.applyOptions({width: window.innerWidth, height: window.innerHeight - 110});
+  chart.applyOptions({width: window.innerWidth, height: window.innerHeight - 80});
 });
 </script>
 </body>
