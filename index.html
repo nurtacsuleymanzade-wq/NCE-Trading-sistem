@@ -25,7 +25,7 @@ body{margin:0;background:#0d1117;color:#c9d1d9;font-family:system-ui}
 const chart = LightweightCharts.createChart(document.getElementById('chart'), {
   layout:{textColor:'#8b949e',background:{color:'#0d1117'}},
   grid:{vertLines:{color:'#161b22'},horzLines:{color:'#161b22'}},
-  timeScale:{borderColor:'#30363d',timeVisible:true,secondsVisible:false,
+  timeScale:{tickMarkFormatter:function(t){var d=new Date((t-14400)*1000);return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);},borderColor:'#30363d',timeVisible:true,secondsVisible:false,
     tickMarkFormatter: function(t){
       var d=new Date(t*1000);
       return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
@@ -44,7 +44,7 @@ async function init(){
     var data = await r.json();
     var candles = data.map(function(k){
       return {
-        time: Math.floor(k[0]/1000),
+        time: Math.floor(k[0]/1000) + 14400,
         open: parseFloat(k[1]),
         high: parseFloat(k[2]),
         low: parseFloat(k[3]),
