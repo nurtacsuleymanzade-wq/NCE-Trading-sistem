@@ -60,8 +60,8 @@ function init(){
 var vs,ds;
 
 function load(iv){
-  var intv={1d:'1d',1h:'1h',1m:'1m'}[iv];
-  var lim={1d:365,1h:168,1m:100}[iv];
+  var intv={'1d':'1d','1h':'1h','1m':'1m'}[iv];
+  var lim={'1d':365,'1h':168,'1m':100}[iv];
   
   fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval='+intv+'&limit='+lim)
   .then(function(r){return r.json();})
