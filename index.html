@@ -1,134 +1,131 @@
 <!DOCTYPE html>
 <html>
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>BTC</title>
-<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>BTC</title>
 <style>
-body{margin:0;background:#0d1117;color:#c9d1d9;font-family:system-ui;overflow:hidden}
-.h{background:#161b22;padding:5px 12px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #30363d;flex-wrap:wrap}
-.h h1{color:#e94560;font-size:14px;margin:0}
-#pd{font-size:20px;font-weight:700}
-.grn{color:#3fb950}.red{color:#f85149}
-.tf{display:flex;gap:4px;margin-left:auto}
-.tf button{background:#21262d;border:1px solid #30363d;color:#8b949e;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px}
-.tf button.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
-#ct{width:100%;height:calc(100vh - 42px)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0d1117;color:#c9d1d9;font-family:system-ui;overflow:hidden}
+#hd{background:#161b22;padding:5px 12px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #30363d;flex-wrap:wrap}
+#hd h1{color:#e94560;font-size:13px;margin:0}
+#pr{font-size:18px;font-weight:700}
+.gn{color:#3fb950}.rd{color:#f85149}
+#tf{display:flex;gap:3px;margin-left:auto}
+#tf button{background:#21262d;border:1px solid #30363d;color:#8b949e;padding:2px 8px;border-radius:3px;cursor:pointer;font-size:10px}
+#tf button.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
+#ct{width:100%;height:calc(100vh - 38px);position:relative}
 </style>
 </head>
 <body>
-<div class="h">
+<div id="hd">
   <h1>🐉 BTC</h1>
-  <span id="pd">--</span>
-  <span id="ch"></span>
-  <div class="tf">
-    <button data-i="1d" class="on">Gun</button>
-    <button data-i="1h">1s</button>
-    <button data-i="1m">1dk</button>
+  <span id="pr">--</span>
+  <span id="cg"></span>
+  <div id="tf">
+    <button data-v="1d" class="on">Gun</button>
+    <button data-v="1h">1s</button>
+    <button data-v="1m">1dk</button>
   </div>
 </div>
 <div id="ct"></div>
 <script>
-var chart,mainSeries,candleData=[];
-
-function init(){
-  chart=LightweightCharts.createChart(document.getElementById('ct'),{
-    layout:{textColor:'#8b949e',background:{color:'#0d1117'}},
-    grid:{vertLines:{color:'#161b22'},horzLines:{color:'#161b22'}},
-    timeScale:{tickMarkFormatter:function(t){var d=new Date(t*1000);return ("0"+d.getUTCHours()).slice(-2)+":"+("0"+d.getUTCMinutes()).slice(-2);},borderColor:'#30363d',timeVisible:true,secondsVisible:false},
-    rightPriceScale:{borderColor:'#30363d'},
+(function(){
+  var chart = LightweightCharts.createChart(document.getElementById('ct'), {
+    layout: { textColor: '#8b949e', background: { color: '#0d1117' } },
+    grid: { vertLines: { color: '#161b22' }, horzLines: { color: '#161b22' } },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    rightPriceScale: { borderColor: '#30363d' },
+    timeScale: { borderColor: '#30363d', timeVisible: true, secondsVisible: false }
   });
-  
-  // Main chart area (70%)
-  mainSeries=chart.addCandlestickSeries({upColor:'#3fb950',downColor:'#f85149',borderVisible:false,wickUpColor:'#3fb950',wickDownColor:'#f85149',priceScaleId:'main'});
-  chart.priceScale('main').applyOptions({scaleMargins:{top:0,bottom:0.3}});
-  
-  // Volume pane (15%)
-  var volPane=chart.addPane();
-  chart.paneHeight(volPane,80);
-  var volSeries=chart.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'vol',pane:volPane});
-  chart.priceScale('vol').applyOptions({scaleMargins:{top:0,bottom:0}});
-  
-  // Delta pane (15%)
-  var delPane=chart.addPane();
-  chart.paneHeight(delPane,80);
-  var delSeries=chart.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'del',pane:delPane});
-  chart.priceScale('del').applyOptions({scaleMargins:{top:0,bottom:0}});
-  
-  return {volSeries,delSeries,volPane,delPane};
-}
 
-var vs,ds;
-
-function load(iv){
-  var intv={'1d':'1d','1h':'1h','1m':'1m'}[iv];
-  var lim={'1d':365,'1h':168,'1m':100}[iv];
-  
-  fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval='+intv+'&limit='+lim)
-  .then(function(r){return r.json();})
-  .then(function(k){
-    candleData=k.map(function(c){return{
-      time:Math.floor(c[0]/1000)+14400,
-      open:+c[1],high:+c[2],low:+c[3],close:+c[4],
-      volume:+c[5],
-      buyVol:+c[9],
-      sellVol:+c[5]-+c[9],
-      delta:+c[9]-(+c[5]-+c[9])
-    };});
-    
-    // Candles
-    mainSeries.setData(candleData.map(function(c){return{time:c.time,open:c.open,high:c.high,low:c.low,close:c.close};}));
-    
-    // Volume
-    vs.setData(candleData.map(function(c){return{time:c.time,value:c.volume,color:'rgba(63,185,80,0.4)'};}));
-    
-    // Delta (green=buy pressure, red=sell pressure)
-    ds.setData(candleData.map(function(c){return{time:c.time,value:Math.abs(c.delta),color:c.delta>=0?'rgba(63,185,80,0.4)':'rgba(248,81,73,0.4)'};}));
-    
-    chart.timeScale().fitContent();
-    updateDisplay();
+  var mainSeries = chart.addCandlestickSeries({
+    upColor: '#3fb950', downColor: '#f85149', borderVisible: false,
+    wickUpColor: '#3fb950', wickDownColor: '#f85149',
+    priceScaleId: 'right'
   });
-}
+  chart.priceScale('right').applyOptions({ scaleMargins: { top: 0, bottom: 0.3 } });
 
-function updateDisplay(){
-  if(!candleData.length)return;
-  var last=candleData[candleData.length-1];
-  var prev=candleData.length>1?candleData[candleData.length-2].close:last.close;
-  var change=(last.close-prev)/prev*100;
-  document.getElementById('pd').textContent='$'+last.close.toLocaleString();
-  document.getElementById('ch').textContent=(change>0?'+':'')+change.toFixed(2)+'%';
-  document.getElementById('ch').className=change>=0?'grn':'red';
-}
+  var volSeries = chart.addHistogramSeries({
+    color: '#26a69a', priceFormat: { type: 'volume' }, priceScaleId: 'vol'
+  });
+  chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.7, bottom: 0.15 } });
 
-// Init
-var r=init();
-vs=r.volSeries;ds=r.delSeries;
-load('1d');
+  var delSeries = chart.addHistogramSeries({
+    color: '#ef5350', priceFormat: { type: 'volume' }, priceScaleId: 'del'
+  });
+  chart.priceScale('del').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
 
-// Timeframe
-document.querySelectorAll('.tf button').forEach(function(b){
-  b.onclick=function(){
-    document.querySelectorAll('.tf button').forEach(function(x){x.classList.remove('on');});
-    b.classList.add('on');
-    load(b.dataset.i);
-  };
-});
+  var curData = [];
 
-// WebSocket
-var ws=new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
-ws.onmessage=function(e){try{
-  var d=JSON.parse(e.data),p=parseFloat(d.p);
-  document.getElementById('pd').textContent='$'+p.toLocaleString();
-  if(candleData.length){
-    var last=candleData[candleData.length-1];
-    last.high=Math.max(last.high,p);
-    last.low=Math.min(last.low,p);
-    last.close=p;
-    mainSeries.update({time:last.time,open:last.open,high:last.high,low:last.low,close:last.close});
+  function loadData(tf) {
+    var intervals = { '1d': ['1d', 365], '1h': ['1h', 168], '1m': ['1m', 100] };
+    var p = intervals[tf] || intervals['1d'];
+    
+    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=' + p[0] + '&limit=' + p[1])
+      .then(function(r) { return r.json(); })
+      .then(function(k) {
+        curData = k.map(function(c) {
+          var ts = Math.floor(c[0] / 1000) + 14400;
+          var o = parseFloat(c[1]), h = parseFloat(c[2]), l = parseFloat(c[3]), cl = parseFloat(c[4]);
+          var v = parseFloat(c[5]), bv = parseFloat(c[9]), sv = v - bv, d = bv - sv;
+          return { time: ts, open: o, high: h, low: l, close: cl, volume: v, buy: bv, sell: sv, delta: d };
+        });
+
+        mainSeries.setData(curData.map(function(x) { return { time: x.time, open: x.open, high: x.high, low: x.low, close: x.close }; }));
+        
+        var maxVol = 0;
+        curData.forEach(function(x) { if (x.volume > maxVol) maxVol = x.volume; });
+        
+        volSeries.setData(curData.map(function(x) {
+          return { time: x.time, value: x.volume, color: 'rgba(38,166,154,0.3)' };
+        }));
+        
+        delSeries.setData(curData.map(function(x) {
+          return { time: x.time, value: Math.abs(x.delta), color: x.delta >= 0 ? 'rgba(38,166,154,0.3)' : 'rgba(239,83,80,0.3)' };
+        }));
+
+        chart.timeScale().fitContent();
+        updateDisplay();
+      });
   }
-}catch(e2){}};
-ws.onclose=function(){setTimeout(function(){ws=new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');},3000);};
 
-window.onresize=function(){chart.applyOptions({width:window.innerWidth,height:window.innerHeight-42});};
+  function updateDisplay() {
+    if (!curData.length) return;
+    var last = curData[curData.length - 1];
+    var prev = curData.length > 1 ? curData[curData.length - 2].close : last.close;
+    var ch = (last.close - prev) / prev * 100;
+    document.getElementById('pr').textContent = '$' + last.close.toLocaleString();
+    document.getElementById('cg').textContent = (ch > 0 ? '+' : '') + ch.toFixed(2) + '%';
+    document.getElementById('cg').className = ch >= 0 ? 'gn' : 'rd';
+  }
+
+  loadData('1d');
+
+  document.querySelectorAll('#tf button').forEach(function(b) {
+    b.onclick = function() {
+      document.querySelectorAll('#tf button').forEach(function(x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      loadData(b.dataset.v);
+    };
+  });
+
+  var ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
+  ws.onmessage = function(e) {
+    try {
+      var d = JSON.parse(e.data);
+      var p = parseFloat(d.p);
+      document.getElementById('pr').textContent = '$' + p.toLocaleString();
+      if (curData.length) {
+        var last = curData[curData.length - 1];
+        last.high = Math.max(last.high, p);
+        last.low = Math.min(last.low, p);
+        last.close = p;
+        mainSeries.update({ time: last.time, open: last.open, high: last.high, low: last.low, close: last.close });
+      }
+    } catch(e2) {}
+  };
+  ws.onclose = function() { setTimeout(function() { ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade'); }, 3000); };
+
+  window.onresize = function() { chart.applyOptions({ width: window.innerWidth, height: window.innerHeight - 38 }); };
+})();
 </script>
 </body>
 </html>
