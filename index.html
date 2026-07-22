@@ -25,12 +25,7 @@ body{margin:0;background:#0d1117;color:#c9d1d9;font-family:system-ui}
 const chart = LightweightCharts.createChart(document.getElementById('chart'), {
   layout:{textColor:'#8b949e',background:{color:'#0d1117'}},
   grid:{vertLines:{color:'#161b22'},horzLines:{color:'#161b22'}},
-  timeScale:{tickMarkFormatter:function(t){var d=new Date((t-14400)*1000);return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);},borderColor:'#30363d',timeVisible:true,secondsVisible:false,
-    tickMarkFormatter: function(t){
-      var d=new Date(t*1000);
-      return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
-    }
-  },
+  timeScale:{tickMarkFormatter:function(t){var d=new Date(t*1000);return ("0"+d.getUTCHours()).slice(-2)+":"+("0"+d.getUTCMinutes()).slice(-2);},borderColor:'#30363d',timeVisible:true,secondsVisible:false},
 });
 const series = chart.addCandlestickSeries({
   upColor:'#3fb950',downColor:'#f85149',borderVisible:false,
