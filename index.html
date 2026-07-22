@@ -6,157 +6,106 @@
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 body{margin:0;background:#0d1117;color:#c9d1d9;font-family:system-ui;overflow:hidden}
-.h{background:#161b22;padding:5px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.h h2{color:#e94560;font-size:13px;margin:0}
+#h{background:#161b22;padding:5px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#h h2{color:#e94560;font-size:13px;margin:0}
 #p{font-size:18px;font-weight:700}
 .g{color:#3fb950}.r{color:#f85149}
-.ctrl{display:flex;gap:3px;flex-wrap:wrap;align-items:center}
-.ctrl button{background:#21262d;border:1px solid #30363d;color:#8b949e;padding:2px 8px;border-radius:3px;cursor:pointer;font-size:10px}
-.ctrl button.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
-.ind{display:flex;gap:4px;flex-wrap:wrap;font-size:10px;background:#161b22;padding:4px 12px;border-bottom:1px solid #30363d}
-.ind label{display:flex;align-items:center;gap:3px;cursor:pointer;padding:2px 6px;border-radius:3px}
-.ind input{margin:0}
+.t{display:flex;gap:3px;margin-left:auto}
+.t button{background:#21262d;border:1px solid #30363d;color:#8b949e;padding:2px 8px;border-radius:3px;cursor:pointer;font-size:10px}
+.t button.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
+#ind{display:flex;gap:4px;flex-wrap:wrap;font-size:10px;background:#161b22;padding:4px 12px;border-bottom:1px solid #30363d}
+#ind label{display:flex;align-items:center;gap:3px;cursor:pointer;padding:2px 6px;border-radius:3px}
+#ind input{margin:0}
 #ct{width:100%;height:calc(100vh - 65px)}
 </style>
 </head>
 <body>
-<div class="h">
+<div id="h">
   <h2>🐉 BTC</h2>
   <span id="p">--</span>
-  <span id="ch"></span>
-  <div class="ctrl">
-    <button data-t="daily" class="on">Gün</button>
-    <button data-t="1h">1s</button>
-    <button data-t="1m">1dk</button>
+  <span id="c"></span>
+  <div class="t">
+    <button data-i="1d" class="on">Gün</button>
+    <button data-i="1h">1s</button>
+    <button data-i="1m">1dk</button>
   </div>
 </div>
-<div class="ind">
-  <label style="border-left:3px solid #f0883e"><input type="checkbox" id="c7" checked> SMA7</label>
-  <label style="border-left:3px solid #ffd700"><input type="checkbox" id="c25" checked> SMA25</label>
-  <label style="border-left:3px solid #ff6b9d"><input type="checkbox" id="c99" checked> SMA99</label>
-  <label style="border-left:3px solid #8b5cf6"><input type="checkbox" id="cBB"> BB</label>
-  <label style="border-left:3px solid #22d3ee"><input type="checkbox" id="cRSI"> RSI</label>
+<div id="ind">
+  <label style="border-left:3px solid #f0883e"><input type="checkbox" id="s7" checked>SMA7</label>
+  <label style="border-left:3px solid #ffd700"><input type="checkbox" id="s25" checked>SMA25</label>
+  <label style="border-left:3px solid #ff6b9d"><input type="checkbox" id="s99" checked>SMA99</label>
+  <label style="border-left:3px solid #8b5cf6"><input type="checkbox" id="bb">BB</label>
+  <label style="border-left:3px solid #22d3ee"><input type="checkbox" id="rsi">RSI</label>
 </div>
 <div id="ct"></div>
 <script>
-// FIXED: Use absolute GitHub raw URL for data
-var DATA_URL = 'https://raw.githubusercontent.com/nurtacsuleymanzade-wq/NCE-Trading-sistem/main/data/btc_daily.json';
+var url='https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=500';
+var iv='1d', chart, cs, l7, l25, l99, bu, bm, bl, rp, rs, dd=[];
 
-var chart = LightweightCharts.createChart(document.getElementById('ct'),{
-  layout:{textColor:'#8b949e',background:{color:'#0d1117'}},
-  grid:{vertLines:{color:'#161b22'},horzLines:{color:'#161b22'}},
-  timeScale:{borderColor:'#30363d',timeVisible:true,secondsVisible:false},
-});
-var series = chart.addCandlestickSeries({
-  upColor:'#3fb950',downColor:'#f85149',borderVisible:false,
-  wickUpColor:'#3fb950',wickDownColor:'#f85149',
-});
-var sma7 = chart.addLineSeries({color:'#f0883e',lineWidth:1,priceLineVisible:false});
-var sma25 = chart.addLineSeries({color:'#ffd700',lineWidth:1,priceLineVisible:false});
-var sma99 = chart.addLineSeries({color:'#ff6b9d',lineWidth:1,priceLineVisible:false});
-var bbU = chart.addLineSeries({color:'#8b5cf6',lineWidth:1,priceLineVisible:false});
-var bbM = chart.addLineSeries({color:'#8b5cf6',lineWidth:1,priceLineVisible:false,lineStyle:2});
-var bbL = chart.addLineSeries({color:'#8b5cf6',lineWidth:1,priceLineVisible:false});
-var rsiPane = chart.addPane();
-var rsiS = chart.addLineSeries({color:'#22d3ee',lineWidth:1,priceLineVisible:false,pane:rsiPane});
-chart.paneHeight(rsiPane,0);
+chart=LightweightCharts.createChart(document.getElementById('ct'),{layout:{textColor:'#8b949e',background:{color:'#0d1117'}},grid:{vertLines:{color:'#161b22'},horzLines:{color:'#161b22'}},timeScale:{borderColor:'#30363d',timeVisible:true,secondsVisible:false}});
+cs=chart.addCandlestickSeries({upColor:'#3fb950',downColor:'#f85149',borderVisible:false,wickUpColor:'#3fb950',wickDownColor:'#f85149'});
+l7=chart.addLineSeries({color:'#f0883e',lineWidth:1,priceLineVisible:false});
+l25=chart.addLineSeries({color:'#ffd700',lineWidth:1,priceLineVisible:false});
+l99=chart.addLineSeries({color:'#ff6b9d',lineWidth:1,priceLineVisible:false});
+bu=chart.addLineSeries({color:'#8b5cf6',lineWidth:1,priceLineVisible:false});
+bm=chart.addLineSeries({color:'#8b5cf6',lineWidth:1,priceLineVisible:false,lineStyle:2});
+bl=chart.addLineSeries({color:'#8b5cf6',lineWidth:1,priceLineVisible:false});
+rp=chart.addPane();rs=chart.addLineSeries({color:'#22d3ee',lineWidth:1,priceLineVisible:false,pane:rp});
+chart.paneHeight(rp,0);
 
-var lastClose=0, curData=[];
+function sma(d,p){var r=[];for(var i=p-1;i<d.length;i++){var s=0;for(var j=0;j<p;j++)s+=d[i-j].close;r.push({time:d[i].time,value:s/p});}return r;}
+function bb(d,p,k){var m=sma(d,p),u=[],l=[];for(var i=0;i<m.length;i++){var z=i+p-1,su=0;for(var j=0;j<p;j++)su+=Math.pow(d[z-j].close-m[i].value,2);var sd=Math.sqrt(su/p);u.push({time:m[i].time,value:m[i].value+k*sd});l.push({time:m[i].time,value:m[i].value-k*sd});}return{mid:m,upper:u,lower:l};}
+function rsi(d,p){var r=[];for(var i=p;i<d.length;i++){var g=0,ls=0;for(var j=i-p+1;j<=i;j++){var ch=d[j].close-d[j-1].close;if(ch>0)g+=ch;else ls-=ch;}var ag=g/p,al=ls/p;if(al===0){r.push({time:d[i].time,value:100});continue;}r.push({time:d[i].time,value:100-100/(1+ag/al)});}return r;}
 
-function SMA(d,p){var r=[];for(var i=p-1;i<d.length;i++){var s=0;for(var j=0;j<p;j++)s+=d[i-j].close;r.push({time:d[i].time,value:s/p});}return r;}
-function BB(d,p,k){
-  var m=SMA(d,p),u=[],l=[];
-  for(var i=0;i<m.length;i++){
-    var idx=i+p-1,sum=0;
-    for(var j=0;j<p;j++)sum+=Math.pow(d[idx-j].close-m[i].value,2);
-    var std=Math.sqrt(sum/p);
-    u.push({time:m[i].time,value:m[i].value+k*std});
-    l.push({time:m[i].time,value:m[i].value-k*std});
-  }
-  return {mid:m,upper:u,lower:l};
-}
-function RSI(d,p){
-  var r=[];for(var i=p;i<d.length;i++){
-    var g=0,ls=0;
-    for(var j=i-p+1;j<=i;j++){var c=d[j].close-d[j-1].close;if(c>0)g+=c;else ls-=c;}
-    var ag=g/p,al=ls/p;if(al===0){r.push({time:d[i].time,value:100});continue;}
-    r.push({time:d[i].time,value:100-100/(1+ag/al)});
-  }
-  return r;
-}
-
-function render(data){
-  curData=data;
-  var s7=SMA(data,7),s25=SMA(data,25),s99=SMA(data,99);
-  sma7.setData(s7);sma25.setData(s25);sma99.setData(s99);
-  var bb=BB(data,20,2);bbU.setData(bb.upper);bbM.setData(bb.mid);bbL.setData(bb.lower);
-  var rsi=RSI(data,14);rsiS.setData(rsi);
-  if(rsi.length)chart.paneHeight(rsiPane,document.getElementById('cRSI').checked?80:0);
-  [sma7,sma25,sma99].forEach(function(s,i){s.applyOptions({visible:[c7,c25,c99][i].checked});});
-  [bbU,bbM,bbL].forEach(function(s){s.applyOptions({visible:cBB.checked});});
-  rsiS.applyOptions({visible:cRSI.checked});
-}
-
-function loadData(data){
-  series.setData(data);
-  render(data);
+function load(k){
+  dd=k.map(function(c){return{time:Math.floor(c[0]/1000),open:+c[1],high:+c[2],low:+c[3],close:+c[4]};});
+  cs.setData(dd);
+  var s7=sma(dd,7),s25=sma(dd,25),s99=sma(dd,99);
+  l7.setData(s7);l25.setData(s25);l99.setData(s99);
+  var b=bb(dd,20,2);bu.setData(b.upper);bm.setData(b.mid);bl.setData(b.lower);
+  var r=rsi(dd,14);rs.setData(r);
+  if(r.length)chart.paneHeight(rp,document.getElementById('rsi').checked?80:0);
+  l7.applyOptions({visible:document.getElementById('s7').checked});
+  l25.applyOptions({visible:document.getElementById('s25').checked});
+  l99.applyOptions({visible:document.getElementById('s99').checked});
+  [bu,bm,bl].forEach(function(s){s.applyOptions({visible:document.getElementById('bb').checked});});
+  rs.applyOptions({visible:document.getElementById('rsi').checked});
   chart.timeScale().fitContent();
-  var last=data[data.length-1],prev=data.length>1?data[data.length-2].close:last.close;
-  var ch=(last.close-prev)/prev*100;
-  document.getElementById('p').textContent='$'+last.close.toLocaleString();
-  document.getElementById('ch').textContent=(ch>0?'+':'')+ch.toFixed(2)+'%';
-  document.getElementById('ch').className=ch>=0?'g':'r';
-  lastClose=last.close;
+  var ls=dd[dd.length-1],pr=dd.length>1?dd[dd.length-2].close:ls.close;
+  var ch=(ls.close-pr)/pr*100;
+  document.getElementById('p').textContent='$'+ls.close.toLocaleString();
+  document.getElementById('c').textContent=(ch>0?'+':'')+ch.toFixed(2)+'%';
+  document.getElementById('c').className=ch>=0?'g':'r';
 }
 
-// Load daily from our JSON
-fetch(DATA_URL).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
-.then(function(d){
-  var data=d.map(function(c){return{time:c.time,open:c.open,high:c.high,low:c.low,close:c.close};});
-  loadData(data);
-}).catch(function(e){
-  document.getElementById('p').textContent='Hata: '+e.message;
-  // Fallback: try Binance daily
-  fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=365').then(function(r){return r.json();}).then(function(k){
-    var data=k.map(function(c){return{time:Math.floor(c[0]/1000),open:+c[1],high:+c[2],low:+c[3],close:+c[4]};});
-    loadData(data);
-  }).catch(function(e2){document.getElementById('p').textContent='Baglanti hatasi';});
-});
+fetch(url).then(function(r){return r.json();}).then(load).catch(function(){document.getElementById('p').textContent='Hata';});
 
-// Toggle indicators
-['c7','c25','c99','cBB','cRSI'].forEach(function(id){
-  document.getElementById(id).onchange=function(){if(curData.length)render(curData);
-    if(id==='cRSI')chart.paneHeight(rsiPane,document.getElementById('cRSI').checked?80:0);};
-});
-
-// Timeframes
-document.querySelectorAll('.ctrl button').forEach(function(b){
-  b.onclick=function(){
-    document.querySelectorAll('.ctrl button').forEach(function(x){x.classList.remove('on');});
-    b.classList.add('on');
-    var intv={daily:'1d',1h:'1h',1m:'1m'}[b.dataset.t];
-    var limit={daily:365,1h:168,1m:720}[b.dataset.t];
-    if(b.dataset.t==='daily'){
-      fetch(DATA_URL).then(function(r){return r.json();}).then(function(d){
-        loadData(d.map(function(c){return{time:c.time,open:c.open,high:c.high,low:c.low,close:c.close};}));
-      });
-    } else {
-      fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval='+intv+'&limit='+limit)
-      .then(function(r){return r.json();}).then(function(k){
-        loadData(k.map(function(c){return{time:Math.floor(c[0]/1000),open:+c[1],high:+c[2],low:+c[3],close:+c[4]};}));
-      });
-    }
+['s7','s25','s99','bb','rsi'].forEach(function(id){
+  document.getElementById(id).onchange=function(){
+    if(!dd.length)return;
+    l7.applyOptions({visible:document.getElementById('s7').checked});
+    l25.applyOptions({visible:document.getElementById('s25').checked});
+    l99.applyOptions({visible:document.getElementById('s99').checked});
+    [bu,bm,bl].forEach(function(s){s.applyOptions({visible:document.getElementById('bb').checked});});
+    rs.applyOptions({visible:document.getElementById('rsi').checked});
+    if(id==='rsi')chart.paneHeight(rp,document.getElementById('rsi').checked?80:0);
   };
 });
 
-// WebSocket
+document.querySelectorAll('.t button').forEach(function(b){
+  b.onclick=function(){
+    document.querySelectorAll('.t button').forEach(function(x){x.classList.remove('on');});
+    b.classList.add('on');
+    var m={1d:365,1h:168,1m:720}[b.dataset.i];
+    var i={1d:'1d',1h:'1h',1m:'1m'}[b.dataset.i];
+    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval='+i+'&limit='+m).then(function(r){return r.json();}).then(load);
+  };
+});
+
 var ws=new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
 ws.onmessage=function(e){try{
   var d=JSON.parse(e.data),p=parseFloat(d.p);
   document.getElementById('p').textContent='$'+p.toLocaleString();
-  if(lastClose){var ch=(p-lastClose)/lastClose*100;
-    document.getElementById('ch').textContent=(ch>0?'+':'')+ch.toFixed(2)+'%';
-    document.getElementById('ch').className=ch>=0?'g':'r';}
 }catch(e2){}};
 ws.onclose=function(){setTimeout(function(){ws=new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');},3000);};
 
