@@ -2,235 +2,172 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>HOVA | BTC</title>
-<script>0</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HOVA BTC</title>
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0d1117;color:#c9d1d9;font-family:system-ui,sans-serif;overflow:hidden}
-.hdr{background:#161b22;padding:6px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #30363d;flex-wrap:wrap}
-.hdr h1{font-size:13px;color:#e94560}
-#prc{font-size:18px;font-weight:700}
-.grn{color:#3fb950}.red{color:#f85149}
-.tf{display:flex;gap:3px;margin-left:auto;flex-wrap:wrap}
-.tf button{background:#21262d;border:1px solid #30363d;color:#8b949e;padding:2px 8px;border-radius:3px;cursor:pointer;font-size:10px}
-.tf button.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
-#cht{width:100%;height:calc(100vh - 72px)}
-.stats{display:flex;gap:10px;font-size:10px;color:#8b949e;padding:3px 12px;background:#161b22;border-bottom:1px solid #30363d;flex-wrap:wrap;overflow-x:auto;white-space:nowrap}
-.stats span b{color:#c9d1d9}
+body{background:#0d1117;color:#c9d1d9;font-family:system-ui,sans-serif}
+.h{background:#161b22;padding:8px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:1px solid #30363d}
+.h h1{color:#e94560;font-size:14px}
+#p{font-size:20px;font-weight:700}
+.grn{color:#3fb950}.redd{color:#f85149}
+.t{display:flex;gap:4px;margin-left:auto}
+.t button{background:#21262d;border:1px solid #30363d;color:#8b949e;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px}
+.t button.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
+.s{display:flex;gap:10px;font-size:10px;color:#8b949e;padding:4px 12px;background:#161b22;border-bottom:1px solid #30363d;flex-wrap:wrap}
+.s span b{color:#c9d1d9}
+#c{width:100%;height:calc(100vh - 80px)}
 </style>
 </head>
 <body>
-<div class="hdr">
-  <h1>🐉 HOVA | BTC</h1>
-  <span id="prc">--</span>
-  <span id="chg"></span>
-  <div class="tf" id="tfB">
-    <button data-s="5">5sn</button>
-    <button data-s="15">15sn</button>
-    <button data-s="60" class="on">1dk</button>
-    <button data-s="300">5dk</button>
-    <button data-s="3600">1s</button>
-    <button data-s="86400">Gün</button>
+<div class="h">
+  <h1>🐉 BTC</h1>
+  <span id="p">--</span>
+  <span id="c"></span>
+  <div class="t" id="tf">
+    <button data-m="1">1dk</button>
+    <button data-m="5" class="on">5dk</button>
+    <button data-m="15">15dk</button>
+    <button data-m="60">1s</button>
+    <button data-m="240">4s</button>
+    <button data-m="1440">Gün</button>
   </div>
 </div>
-<div class="stats">
-  <span>H24: <b id="h24">--</b></span>
-  <span>L24: <b id="l24">--</b></span>
-  <span>Vol: <b id="v24">--</b></span>
+<div class="s">
+  <span>Yüksek: <b id="h24">--</b></span>
+  <span>Düşük: <b id="l24">--</b></span>
+  <span>Hacim: <b id="v24">--</b></span>
   <span>Funding: <b id="fd">--</b></span>
   <span>OI: <b id="oi">--</b></span>
-  <span>L/S: <b id="ls">--</b></span>
 </div>
-<div id="cht"></div>
-
-<script">
-const chart = LightweightCharts.createChart(document.getElementById('cht'), {
+<div id="c"></div>
+<script>
+const chart = LightweightCharts.createChart(document.getElementById('c'), {
   layout:{textColor:'#8b949e',background:{type:'solid',color:'#0d1117'}},
   grid:{vertLines:{color:'#161b22'},horzLines:{color:'#161b22'}},
   rightPriceScale:{borderColor:'#30363d'},
-  timeScale:{borderColor:'#30363d',timeVisible:true,secondsVisible:false,tickMarkFormatter:(t)=>{
-    const d=new Date(t*1000);
-    const h=d.getHours().toString().padStart(2,'0');
-    const m=d.getMinutes().toString().padStart(2,'0');
-    return h+':'+m;
-  }},
+  timeScale:{borderColor:'#30363d',timeVisible:true,secondsVisible:false},
 });
-const series = chart.addCandlestickSeries({
+const cs = chart.addCandlestickSeries({
   upColor:'#3fb950',downColor:'#f85149',borderVisible:false,
   wickUpColor:'#3fb950',wickDownColor:'#f85149',
 });
 
-let res = 60; // default 1dk
-let candles = {};
-let loadedData = [];
+let interval = 5; // minutes
+let allCandles = {};
+let currentData = [];
 
-// Load all historical data + recent 1m + WebSocket
-async function init() {
+// Load data from Binance REST
+async function loadData(min) {
   try {
-    // 1. Load full daily history (2.5 years)
-    const dRes = await fetch('data/btc_daily.json');
-    const dailyData = await dRes.json();
-    for (const d of dailyData) {
-      candles[d.time] = {time:d.time, open:d.open, high:d.high, low:d.low, close:d.close};
+    const p = min || interval;
+    const binInt = {1:'1m',5:'5m',15:'15m',60:'1h',240:'4h',1440:'1d'}[p] || '5m';
+    
+    // Build candles from 1m data
+    if (p === 1440) {
+      // Daily - use our 2.5 year data
+      const r = await fetch('data/btc_daily.json');
+      const d = await r.json();
+      cs.setData(d.map(x => ({time:x.time, open:x.open, high:x.high, low:x.low, close:x.close})));
+      chart.timeScale().fitContent();
+      if(d.length) document.getElementById('p').textContent = '$'+d[d.length-1].close.toLocaleString();
+      return d;
     }
     
-    // 2. Load recent 1-minute data (last 500 candles)
-    const mRes = await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=500');
-    const minData = await mRes.json();
-    for (const k of minData) {
-      const t = Math.floor(k[0]/1000);
-      candles[t] = {time:t, open:+k[1], high:+k[2], low:+k[3], close:+k[4]};
+    // Historical 1m candles
+    const r = await fetch(`https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${binInt}&limit=500`);
+    const d = await r.json();
+    const data = d.map(k => ({
+      time: Math.floor(k[0]/1000),
+      open: +k[1], high: +k[2], low: +k[3], close: +k[4],
+    }));
+    
+    cs.setData(data);
+    chart.timeScale().fitContent();
+    currentData = data;
+    
+    if(data.length) {
+      const last = data[data.length-1];
+      document.getElementById('p').textContent = '$'+last.close.toLocaleString();
+      const ch = (last.close - last.open)/last.open*100;
+      document.getElementById('c').textContent = (ch>=0?'+':'')+ch.toFixed(2)+'%';
+      document.getElementById('c').className = ch>=0?'grn':'redd';
     }
-    
-    renderCandles();
-    
-    // Update price
-    const keys = Object.keys(candles).sort();
-    const last = candles[keys[keys.length-1]];
-    if (last) {
-      document.getElementById('prc').textContent = '$'+last.close.toLocaleString();
-    }
-    
+    return data;
   } catch(e) {
-    document.getElementById('prc').textContent = 'Yükleniyor...';
+    document.getElementById('p').textContent = 'Hata';
+    return [];
   }
 }
 
-function renderCandles() {
-  const resSec = res;
-  const binned = {};
-  
-  const keys = Object.keys(candles).sort();
-  for (const k of keys) {
-    const c = candles[k];
-    const key = Math.floor(parseInt(k) / resSec) * resSec;
-    if (!binned[key]) {
-      binned[key] = {time:key, open:c.open, high:c.high, low:c.low, close:c.close};
-    } else {
-      const x = binned[key];
-      x.high = Math.max(x.high, c.high);
-      x.low = Math.min(x.low, c.low);
-      x.close = c.close;
-    }
-  }
-  
-  const sorted = Object.values(binned).sort((a,b) => a.time - b.time);
-  loadedData = sorted;
-  series.setData(sorted);
-  chart.timeScale().fitContent();
-}
-
-// WebSocket - real-time trades
+// WebSocket - realtime update
 let ws = null;
-function wsConnect() {
+function startWS() {
   if(ws) ws.close();
   ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
   
   ws.onmessage = e => {
-    const d = JSON.parse(e.data);
-    const p = +d.p;
-    const t = Math.floor(d.T / 1000);
-    
-    // Store 1-second candle
-    const secKey = Math.floor(t / 1) * 1;
-    if (!candles[secKey]) {
-      candles[secKey] = {time:secKey, open:p, high:p, low:p, close:p};
-      // Keep only last 24h of second-candles
-      const limit = t - 86400;
-      Object.keys(candles).forEach(k => {
-        if (parseInt(k) < limit && !loadedData.some(d => d.time === parseInt(k))) {
-          delete candles[k];
-        }
-      });
-    } else {
-      const c = candles[secKey];
-      c.high = Math.max(c.high, p);
-      c.low = Math.min(c.low, p);
-      c.close = p;
-    }
-    
-    // Update chart with binned candle
-    const key = Math.floor(t / res) * res;
-    if (candles[secKey]) {
-      const rk = Math.floor(secKey / res) * res;
-      if (!candles[rk] && rk !== secKey) {
-        candles[rk] = {time:rk, open:p, high:p, low:p, close:p};
-      }
-      // Find/create the candle for current resolution
-      const allKeys = Object.keys(candles).sort();
-      let binKey = key;
-      for (let i = allKeys.length - 1; i >= 0; i--) {
-        const k = parseInt(allKeys[i]);
-        if (k <= t && k >= t - res) {
-          binKey = Math.floor(k / res) * res;
-          break;
-        }
-      }
+    try {
+      const d = JSON.parse(e.data);
+      const p = +d.p;
       
-      const binCandle = candles[Object.keys(candles).find(k => Math.floor(parseInt(k)/res)*res === binKey)] || 
-                        {time:binKey, open:p, high:p, low:p, close:p};
-      if (binCandle) {
-        binCandle.high = Math.max(binCandle.high, p);
-        binCandle.low = Math.min(binCandle.low, p);
-        binCandle.close = p;
-        candles[binKey] = binCandle;
-        series.update(binCandle);
+      document.getElementById('p').textContent = '$'+p.toLocaleString();
+      
+      // Update last candle if we have data
+      if (currentData.length > 0) {
+        const last = currentData[currentData.length-1];
+        last.high = Math.max(last.high, p);
+        last.low = Math.min(last.low, p);
+        last.close = p;
+        cs.update(last);
+        
+        const ch = (p - currentData[0].open) / currentData[0].open * 100;
+        document.getElementById('c').textContent = (ch>=0?'+':'')+ch.toFixed(2)+'%';
+        document.getElementById('c').className = ch>=0?'grn':'redd';
       }
-    }
-    
-    // Update price display
-    document.getElementById('prc').textContent = '$'+p.toLocaleString();
-    const prevClose = loadedData.length > 0 ? loadedData[loadedData.length-1].close : p;
-    const ch = (p - prevClose) / prevClose * 100;
-    document.getElementById('chg').textContent = (ch>=0?'+':'')+ch.toFixed(2)+'%';
-    document.getElementById('chg').className = ch>=0?'grn':'red';
+    } catch(e) {}
   };
-  
-  ws.onclose = () => setTimeout(wsConnect, 1000);
+  ws.onclose = () => setTimeout(startWS, 2000);
   ws.onerror = () => ws.close();
 }
 
-// Futures data
-async function loadFut() {
+// Futures
+async function loadF() {
   try {
-    const [oiR, frR, lsR, tR] = await Promise.all([
+    const [oiR, frR, tR] = await Promise.all([
       fetch('https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT'),
       fetch('https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1'),
-      fetch('https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=BTCUSDT&period=1d'),
       fetch('https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT'),
     ]);
-    const r = await Promise.all([oiR.json(), frR.json(), lsR.json(), tR.json()]);
-    document.getElementById('h24').textContent = '$'+parseFloat(r[3].highPrice).toLocaleString();
-    document.getElementById('l24').textContent = '$'+parseFloat(r[3].lowPrice).toLocaleString();
-    document.getElementById('v24').textContent = (parseFloat(r[3].quoteVolume)/1e9).toFixed(2)+'B';
-    document.getElementById('fd').textContent = (parseFloat(r[1][0]?.fundingRate||0)*100).toFixed(4)+'%';
-    document.getElementById('oi').textContent = (parseFloat(r[0].openInterest)/1000).toFixed(1)+'K';
-    document.getElementById('ls').textContent = parseFloat(r[2][0]?.longShortRatio||1).toFixed(2);
+    const [oi, fr, t] = await Promise.all([oiR.json(), frR.json(), tR.json()]);
+    document.getElementById('h24').textContent = '$'+parseFloat(t.highPrice).toLocaleString();
+    document.getElementById('l24').textContent = '$'+parseFloat(t.lowPrice).toLocaleString();
+    document.getElementById('v24').textContent = (parseFloat(t.quoteVolume)/1e9).toFixed(2)+'B';
+    document.getElementById('fd').textContent = (parseFloat(fr[0]?.fundingRate||0)*100).toFixed(4)+'%';
+    document.getElementById('oi').textContent = (parseFloat(oi.openInterest)/1000).toFixed(1)+'K';
   } catch(e) {}
 }
 
-// Timeframe
-document.querySelectorAll('.tf button').forEach(b => {
+// Timeframe buttons
+document.querySelectorAll('.t button').forEach(b => {
   b.onclick = () => {
-    document.querySelectorAll('.tf button').forEach(x => x.classList.remove('on'));
+    document.querySelectorAll('.t button').forEach(x => x.classList.remove('on'));
     b.classList.add('on');
-    res = parseInt(b.dataset.s);
-    renderCandles();
+    interval = parseInt(b.dataset.m);
+    loadData();
   };
 });
 
-// Resize
 window.addEventListener('resize', () => {
-  chart.applyOptions({width:window.innerWidth, height:window.innerHeight-72});
+  chart.applyOptions({width:window.innerWidth, height:window.innerHeight-80});
 });
 
-// GO
-init();
-loadFut();
-setInterval(loadFut, 30000);
-wsConnect();
+// Start
+loadData();
+loadF();
+setInterval(loadF, 30000);
+startWS();
 </script>
 </body>
 </html>
