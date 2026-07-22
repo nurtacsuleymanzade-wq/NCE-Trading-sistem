@@ -3,101 +3,101 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>BTC</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
-body{margin:0;background:#0d1117;color:#c9d1d9;font-family:system-ui;overflow:hidden;text-align:center}
-#h{padding:8px;font-size:20px;font-weight:700;background:#161b22;border-bottom:1px solid #30363d}
-canvas{width:100%;height:calc(100vh - 45px);display:block}
+body{margin:0;background:#0d1117;color:#c9d1d9;font-family:system-ui;overflow:hidden}
+.h{background:#161b22;padding:5px 12px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #30363d}
+.h h1{color:#e94560;font-size:14px;margin:0}
+#pd{font-size:20px;font-weight:700}
+.grn{color:#3fb950}.red{color:#f85149}
+.tf{display:flex;gap:4px;margin-left:auto}
+.tf button{background:#21262d;border:1px solid #30363d;color:#8b949e;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px}
+.tf button.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
+#ct{width:100%;height:calc(100vh - 42px)}
 </style>
 </head>
 <body>
-<div id="h">🐉 BTC $66,522</div>
-<canvas id="cv"></canvas>
+<div class="h">
+  <h1>🐉 BTC</h1>
+  <span id="pd">--</span>
+  <span id="ch"></span>
+  <div class="tf">
+    <button data-i="1d" class="on">Gun</button>
+    <button data-i="1h">1s</button>
+    <button data-i="1m">1dk</button>
+  </div>
+</div>
+<div id="ct"></div>
 <script>
-var cv=document.getElementById('cv'),cx=cv.getContext('2d');
-var W=window.innerWidth,H=window.innerHeight-45;
-cv.width=W*2;cv.height=H*2;cv.style.width=W+'px';cv.style.height=H+'px';
-cx.scale(2,2);
+var ch,cs;
 
-var d=[
-{t:1774310400,o:70866,c:70523.9},
-{t:1774396800,o:70524,c:71297.5},
-{t:1774483200,o:71297.5,c:68788},
-{t:1774569600,o:68788.1,c:66364.2},
-{t:1780358400,o:71391.5,c:66730},
-{t:1780444800,o:66730.1,c:64117.7},
-{t:1780531200,o:64117.7,c:63853.4},
-{t:1780617600,o:63853.4,c:61022},
-{t:1780704000,o:61022,c:60849.7},
-{t:1780790400,o:60849.7,c:63298.5},
-{t:1780876800,o:63299,c:63057.9},
-{t:1780963200,o:63057.9,c:61695},
-{t:1781049600,o:61694.9,c:61483.7},
-{t:1781136000,o:61483.6,c:63597.9},
-{t:1781222400,o:63598,c:63547},
-{t:1781308800,o:63547,c:64418.2},
-{t:1781395200,o:64418.3,c:65702.1},
-{t:1781481600,o:65702.1,c:66285.9},
-{t:1781568000,o:66285.9,c:65644.8},
-{t:1781654400,o:65644.8,c:64472.9},
-{t:1781740800,o:64472.9,c:62924.1},
-{t:1781827200,o:62924,c:63512.6},
-{t:1781913600,o:63512.5,c:64270},
-{t:1782000000,o:64270.1,c:63287.1},
-{t:1782086400,o:63287.2,c:63990.2},
-{t:1782172800,o:63990.1,c:62696.7},
-{t:1782259200,o:62696.7,c:61051.2},
-{t:1782345600,o:61051.2,c:59771.9},
-{t:1782432000,o:59772,c:60072},
-{t:1782518400,o:60071.9,c:60000.3},
-{t:1782604800,o:60000.4,c:59550.2},
-{t:1782691200,o:59550.2,c:60224.7},
-{t:1782777600,o:60224.7,c:58605.4},
-{t:1784592000,o:65224.7,c:66522.4}
-];
-
-var minP=Infinity,maxP=0;
-d.forEach(function(x){if(x.c<minP)minP=x.c;if(x.c>maxP)maxP=x.c;});
-var pad=(maxP-minP)*0.1;
-minP-=pad;maxP+=pad;
-var range=maxP-minP;
-
-function draw(){
-  cx.clearRect(0,0,W,H);
-  var n=d.length,m=W*0.9,x0=W*0.05,y0=H*0.05,y1=H*0.95;
-  var dx=m/(n-1);
-  
-  // Grid lines
-  cx.strokeStyle='#1a1a3e';cx.lineWidth=0.5;
-  for(var i=0;i<5;i++){var y=y0+(y1-y0)*i/4;cx.beginPath();cx.moveTo(x0,y);cx.lineTo(x0+m,y);cx.stroke();}
-  
-  // Line
-  cx.strokeStyle='#3fb950';cx.lineWidth=2;
-  cx.beginPath();
-  d.forEach(function(p,i){
-    var x=x0+i*dx,y=y1-(p.c-minP)/range*(y1-y0);
-    if(i===0)cx.moveTo(x,y);else cx.lineTo(x,y);
+function init(){
+  ch=LightweightCharts.createChart(document.getElementById('ct'),{
+    layout:{textColor:'#8b949e',background:{color:'#0d1117'}},
+    grid:{vertLines:{color:'#161b22'},horzLines:{color:'#161b22'}},
+    timeScale:{borderColor:'#30363d',timeVisible:true,secondsVisible:false},
+    rightPriceScale:{borderColor:'#30363d'},
   });
-  cx.stroke();
-  
-  // Last price
-  var lst=d[n-1].c;
-  var lx=x0+(n-1)*dx,ly=y1-(lst-minP)/range*(y1-y0);
-  cx.fillStyle='#3fb950';
-  cx.fillRect(lx-1,ly-1,3,3);
-  
-  // Price labels
-  cx.fillStyle='#8b949e';cx.font='10px system-ui';cx.textAlign='right';
-  for(var i=0;i<5;i++){
-    var y=y0+(y1-y0)*i/4;
-    var p=Math.round(maxP-(maxP-minP)*i/4);
-    cx.fillText('$'+p.toLocaleString(),W-5,y+3);
-  }
+  cs=ch.addCandlestickSeries({upColor:'#3fb950',downColor:'#f85149',borderVisible:false,wickUpColor:'#3fb950',wickDownColor:'#f85149'});
 }
 
-draw();
-window.onresize=function(){W=window.innerWidth;H=window.innerHeight-45;
-  cv.width=W*2;cv.height=H*2;cv.style.width=W+'px';cv.style.height=H+'px';
-  cx.scale(2,2);draw();};
+function load(iv,lim){
+  var intv={1d:'1d',1h:'1h',1m:'1m'}[iv];
+  var lims={1d:365,1h:168,1m:100};
+  var l=lim||lims[iv];
+  
+  fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval='+intv+'&limit='+l)
+  .then(function(r){return r.json();})
+  .then(function(k){
+    var data=k.map(function(c){
+      return{
+        time:Math.floor(c[0]/1000),
+        open:parseFloat(c[1]),
+        high:parseFloat(c[2]),
+        low:parseFloat(c[3]),
+        close:parseFloat(c[4])
+      };
+    });
+    
+    cs.setData(data);
+    ch.timeScale().fitContent();
+    
+    var last=data[data.length-1];
+    var prev=data.length>1?data[data.length-2].close:last.close;
+    var change=(last.close-prev)/prev*100;
+    
+    document.getElementById('pd').textContent='$'+last.close.toLocaleString();
+    document.getElementById('ch').textContent=(change>0?'+':'')+change.toFixed(2)+'%';
+    document.getElementById('ch').className=change>=0?'grn':'red';
+  });
+}
+
+// Init
+init();
+load('1d');
+
+// Timeframe buttons
+document.querySelectorAll('.tf button').forEach(function(b){
+  b.onclick=function(){
+    document.querySelectorAll('.tf button').forEach(function(x){x.classList.remove('on');});
+    b.classList.add('on');
+    load(b.dataset.i);
+  };
+});
+
+// WebSocket
+var ws=new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
+ws.onmessage=function(e){
+  try{
+    var d=JSON.parse(e.data);
+    document.getElementById('pd').textContent='$'+parseFloat(d.p).toLocaleString();
+  }catch(e2){}
+};
+ws.onclose=function(){setTimeout(function(){
+  ws=new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
+},3000);};
+
+window.onresize=function(){ch.applyOptions({width:window.innerWidth,height:window.innerHeight-42});};
 </script>
 </body>
 </html>
