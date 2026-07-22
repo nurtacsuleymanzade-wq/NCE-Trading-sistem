@@ -1,23 +1,25 @@
 <!DOCTYPE html>
 <html>
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>BTC</title>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>BTC OF</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#0d1117;color:#c9d1d9;font-family:system-ui;overflow:hidden}
-#hd{background:#161b22;padding:4px 10px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #30363d;flex-wrap:wrap}
-#hd h1{color:#e94560;font-size:12px;margin:0}
-#pr{font-size:16px;font-weight:700}
+#hd{background:#161b22;padding:2px 8px;display:flex;align-items:center;gap:6px;border-bottom:1px solid #30363d;flex-wrap:wrap}
+#hd h1{color:#e94560;font-size:11px;margin:0}
+#pr{font-size:15px;font-weight:700}
 .gn{color:#3fb950}.rd{color:#f85149}
-#tf{display:flex;gap:2px;margin-left:auto;overflow-x:auto;max-width:55%;-webkit-overflow-scrolling:touch}
-#tf button{background:#21262d;border:1px solid #30363d;color:#8b949e;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:9px;white-space:nowrap;flex-shrink:0}
+#tf{display:flex;gap:1px;margin-left:auto;overflow-x:auto;max-width:60%;-webkit-overflow-scrolling:touch}
+#tf button{background:#21262d;border:1px solid #30363d;color:#8b949e;padding:1px 5px;border-radius:2px;cursor:pointer;font-size:8px;white-space:nowrap;flex-shrink:0}
 #tf button.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
-#info{display:flex;gap:8px;font-size:9px;color:#8b949e;padding:2px 10px;background:#161b22;border-bottom:1px solid #30363d;flex-wrap:wrap;overflow-x:auto}
+#info{display:flex;gap:4px;font-size:8px;color:#8b949e;padding:1px 8px;background:#161b22;border-bottom:1px solid #30363d;flex-wrap:wrap;overflow-x:auto;white-space:nowrap}
 #info span b{color:#c9d1d9}
+#ct{position:relative;width:100%;height:calc(100vh - 56px)}
+#tip{display:none;position:absolute;background:rgba(22,27,34,0.95);border:1px solid #30363d;border-radius:6px;padding:6px 8px;font-size:9px;z-index:10;pointer-events:none;min-width:120px}
 </style>
 </head>
 <body>
 <div id="hd">
-  <h1>🐉 BTC</h1>
+  <h1>🐉 BF</h1>
   <span id="pr">--</span>
   <span id="cg"></span>
   <div id="tf"></div>
@@ -30,40 +32,37 @@ body{background:#0d1117;color:#c9d1d9;font-family:system-ui;overflow:hidden}
   <span>Funding: <b id="fd">--</b></span>
   <span>L/S: <b id="ls">--</b></span>
 </div>
-<div id="ct" style="position:relative;width:100%;height:calc(100vh - 62px)">
-  <div id="tip" style="display:none;position:absolute;background:rgba(22,27,34,0.95);border:1px solid #30363d;border-radius:6px;padding:8px 10px;font-size:10px;z-index:10;pointer-events:none;min-width:140px"></div>
-</div>
+<div id="ct"><div id="tip"></div></div>
+
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
-var TF = ['1s','1m','5m','15m','30m','1h','4h','1D','3D'];
-var TF_MAP = {'1s':['1m',1],'1m':['1m',120],'5m':['5m',96],'15m':['15m',96],'30m':['30m',96],'1h':['1h',168],'4h':['4h',120],'1D':['1d',365],'3D':['3d',180]};
+// Data source: VPS if on GitHub Pages, relative if on VPS
+var SRV = window.location.hostname.includes('github') ? 'https://surveillance-damages-gym-harper.trycloudflare.com/chart' : '';
 
+var TFs = ['1s','1m','5m','15m','30m','1h','4h','1D','3D'];
 var curTF = '1D', curData = [], chart, mainS, volS, delS, tip = document.getElementById('tip');
 
-// Timeframe buttons
-var tfBar = document.getElementById('tf');
-TF.forEach(function(t){
+// Build timeframe buttons
+var tb = document.getElementById('tf');
+TFs.forEach(function(t){
   var b = document.createElement('button');
   b.textContent = t;
   b.onclick = function(){
-    tfBar.querySelectorAll('button').forEach(function(x){x.classList.remove('on');});
-    b.classList.add('on');
-    curTF = t;
-    loadData(t);
+    tb.querySelectorAll('button').forEach(function(x){x.classList.remove('on');});
+    b.classList.add('on'); curTF = t; loadTF(t);
     b.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
   };
   if(t === '1D') b.classList.add('on');
-  tfBar.appendChild(b);
+  tb.appendChild(b);
 });
 
-// Init chart
-function initChart(){
+// === CHART ===
+function initC(){
   chart = LightweightCharts.createChart(document.getElementById('ct'), {
-    layout: {textColor:'#8b949e',background:{color:'#0d1117'}},
-    grid: {vertLines:{color:'#161b22'},horzLines:{color:'#161b22'}},
-    timeScale: {borderColor:'#30363d',timeVisible:TF[curTF]=='1s',secondsVisible:TF[curTF]=='1s'},
-    rightPriceScale: {borderColor:'#30363d'},
-    crosshair: {mode:0},
+    layout:{textColor:'#8b949e',background:{color:'#0d1117'}},
+    grid:{vertLines:{color:'#161b22'},horzLines:{color:'#161b22'}},
+    timeScale:{borderColor:'#30363d',timeVisible:curTF=='1s',secondsVisible:curTF=='1s'},
+    rightPriceScale:{borderColor:'#30363d'},
   });
   
   mainS = chart.addCandlestickSeries({upColor:'#3fb950',downColor:'#f85149',borderVisible:false,wickUpColor:'#3fb950',wickDownColor:'#f85149',priceScaleId:'right'});
@@ -75,84 +74,151 @@ function initChart(){
   delS = chart.addHistogramSeries({color:'#ef5350',priceFormat:{type:'volume'},priceScaleId:'del'});
   chart.priceScale('del').applyOptions({scaleMargins:{top:0.85,bottom:0}});
   
-  chart.subscribeCrosshairMove(function(param){
-    if(!param.time || param.point === undefined || !curData.length){
-      tip.style.display = 'none';
-      return;
-    }
-    var d = param.seriesData.get(mainS);
-    if(!d){ tip.style.display = 'none'; return; }
+  // Tooltip
+  chart.subscribeCrosshairMove(function(p){
+    if(!p.time || p.point === undefined || !curData.length){ tip.style.display='none'; return; }
+    var d = p.seriesData.get(mainS);
+    if(!d){ tip.style.display='none'; return; }
     
     var dt = new Date(d.time * 1000);
-    var dateStr = ('0'+dt.getUTCDate()).slice(-2)+'/'+('0'+(dt.getUTCMonth()+1)).slice(-2)+'/'+dt.getUTCFullYear();
-    var timeStr = ('0'+dt.getUTCHours()).slice(-2)+':'+('0'+dt.getUTCMinutes()).slice(-2)+':'+('0'+dt.getUTCSeconds()).slice(-2);
+    var ds = ('0'+dt.getUTCDate()).slice(-2)+'/'+('0'+(dt.getUTCMonth()+1)).slice(-2)+'/'+dt.getUTCFullYear();
+    var ts = ('0'+dt.getUTCHours()).slice(-2)+':'+('0'+dt.getUTCMinutes()).slice(-2)+':'+('0'+dt.getUTCSeconds()).slice(-2);
     
-    // Find matching data point for delta/volume
-    var match = null;
-    for(var i=0;i<curData.length;i++){
-      if(curData[i].time === d.time){ match = curData[i]; break; }
-    }
+    var m = null;
+    for(var i=0;i<curData.length;i++) if(curData[i].t === d.time || curData[i].time === d.time){ m=curData[i]; break; }
+    if(!m) m = {v:0,bv:0,sv:0,del:0};
     
-    var vol = match ? match.volume : 0;
-    var del = match ? match.delta : 0;
-    var buy = match ? match.buyVol : 0;
-    var sell = match ? match.sellVol : 0;
-    var agg = match ? Math.round(del / (vol || 1) * 100) : 0;
+    var vol = m.v||0, bv = m.bv||0, sv = m.sv||(vol-bv), del = m.del||(bv*2-vol), agr = vol ? Math.round(del/vol*100) : 0;
     
-    var html = '<div style="color:#e94560;font-weight:700;margin-bottom:3px">'+dateStr+' '+timeStr+'</div>';
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 8px">';
-    html += '<span style="color:#8b949e">O:</span><span style="text-align:right">$'+d.open.toLocaleString()+'</span>';
-    html += '<span style="color:#8b949e">H:</span><span style="text-align:right;color:#3fb950">$'+d.high.toLocaleString()+'</span>';
-    html += '<span style="color:#8b949e">L:</span><span style="text-align:right;color:#f85149">$'+d.low.toLocaleString()+'</span>';
-    html += '<span style="color:#8b949e">C:</span><span style="text-align:right">$'+d.close.toLocaleString()+'</span>';
-    html += '<span style="color:#8b949e">Vol:</span><span style="text-align:right">'+(vol/1).toFixed(1)+' BTC</span>';
-    html += '<span style="color:#8b949e">Buy:</span><span style="text-align:right;color:#3fb950">'+(buy/1).toFixed(1)+'</span>';
-    html += '<span style="color:#8b949e">Sell:</span><span style="text-align:right;color:#f85149">'+(sell/1).toFixed(1)+'</span>';
-    html += '<span style="color:#8b949e">Delta:</span><span style="text-align:right;color:'+(del>=0?'#3fb950':'#f85149')+'">'+(del>=0?'+':'')+del.toFixed(1)+'</span>';
-    html += '<span style="color:#8b949e">Agr:</span><span style="text-align:right;color:'+(agg>50?'#3fb950':'#f85149')+'">'+agg+'%</span>';
+    var html = '<div style="color:#e94560;font-weight:700;font-size:10px;margin-bottom:2px">'+ds+' '+ts+'</div>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px 6px;font-size:9px">';
+    html += 'O:<span style="text-align:right">$'+d.open.toFixed(1)+'</span>';
+    html += 'H:<span style="text-align:right;color:#3fb950">$'+d.high.toFixed(1)+'</span>';
+    html += 'L:<span style="text-align:right;color:#f85149">$'+d.low.toFixed(1)+'</span>';
+    html += 'C:<span style="text-align:right">$'+d.close.toFixed(1)+'</span>';
+    html += 'Vol:<span style="text-align:right">'+vol.toFixed(1)+'</span>';
+    html += 'Buy:<span style="text-align:right;color:#3fb950">'+bv.toFixed(1)+'</span>';
+    html += 'Sell:<span style="text-align:right;color:#f85149">'+sv.toFixed(1)+'</span>';
+    html += 'Delta:<span style="text-align:right;color:'+(del>=0?'#3fb950':'#f85149')+'">'+(del>=0?'+':'')+del.toFixed(1)+'</span>';
+    html += 'Agr:<span style="text-align:right;color:'+(agr>=0?'#3fb950':'#f85149')+'">'+(agr>=0?'+':'')+agr+'%</span>';
     html += '</div>';
     
     tip.innerHTML = html;
-    var x = Math.min(param.point.x, window.innerWidth - 160);
-    var y = Math.min(param.point.y, window.innerHeight - 200);
-    tip.style.left = Math.max(5,x)+'px';
-    tip.style.top = Math.max(5,y-10)+'px';
-    tip.style.display = 'block';
+    var x = Math.min(p.point.x, window.innerWidth-150);
+    var y = Math.min(p.point.y, window.innerHeight-200);
+    tip.style.cssText = 'display:block;position:absolute;left:'+Math.max(5,x)+'px;top:'+Math.max(5,y-10)+'px';
   });
 }
 
-function loadData(tf){
-  var p = TF_MAP[tf] || TF_MAP['1D'];
-  var intv = p[0], lim = p[1];
+// === LOAD DATA ===
+var ws1s = null;
+
+function loadTF(tf){
+  if(tf === '1s'){
+    load1s();
+    return;
+  }
   
-  // For 1s, use 1m data
-  if(tf === '1s'){ intv = '1m'; lim = 60; }
+  // Close 1s WebSocket if open
+  if(ws1s){ ws1s.close(); ws1s = null; }
   
-  fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval='+intv+'&limit='+lim)
-  .then(function(r){return r.json();})
-  .then(function(k){
-    curData = k.map(function(c){
-      var ts = Math.floor(c[0]/1000) + 14400;
-      return {
-        time: ts, open:+c[1], high:+c[2], low:+c[3], close:+c[4],
-        volume:+c[5], buyVol:+c[9], sellVol:+c[5]-+c[9],
-        delta:+c[9]*2 - +c[5]
-      };
-    });
-    
-    mainS.setData(curData.map(function(x){return{time:x.time,open:x.open,high:x.high,low:x.low,close:x.close};}));
-    volS.setData(curData.map(function(x){return{time:x.time,value:x.volume,color:'rgba(38,166,154,0.3)'};}));
-    delS.setData(curData.map(function(x){return{time:x.time,value:Math.abs(x.delta),color:x.delta>=0?'rgba(38,166,154,0.3)':'rgba(239,83,80,0.3)'};}));
-    
+  var fn = {'1m':'1m','5m':'5m','15m':'15m','30m':'30m','1h':'1h','4h':'4h','1D':'1d','3D':'3d'}[tf] || '1d';
+  
+  fetch(SRV+'/data/bars_'+fn+'.json')
+  .then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.json();
+  })
+  .then(function(d){
+    curData = d;
+    var data = d.map(function(x){return{time:x.t,open:x.o,high:x.h,low:x.l,close:x.c};});
+    mainS.setData(data);
+    volS.setData(d.map(function(x){return{time:x.t,value:x.v,color:'rgba(38,166,154,0.3)'};}));
+    delS.setData(d.map(function(x){
+      var del = x.bv*2 - x.v;
+      return{time:x.t,value:Math.abs(del),color:del>=0?'rgba(38,166,154,0.3)':'rgba(239,83,80,0.3)'};
+    }));
     chart.timeScale().fitContent();
-    
-    var last = curData[curData.length-1];
-    var prev = curData.length>1 ? curData[curData.length-2].close : last.close;
-    var ch = (last.close-prev)/prev*100;
-    document.getElementById('pr').textContent = '$'+last.close.toLocaleString();
-    document.getElementById('cg').textContent = (ch>0?'+':'')+ch.toFixed(2)+'%';
-    document.getElementById('cg').className = ch>=0?'gn':'rd';
+    updatePrice(d);
+  })
+  .catch(function(e){
+    document.getElementById('pr').textContent = 'Hata: '+e.message;
   });
+}
+
+// === 1-SECOND BARS (real-time from WebSocket aggTrade) ===
+var secBars = {};
+var secData = [];
+
+function load1s(){
+  secBars = {};
+  secData = [];
+  render1sBars();
+  
+  if(!ws1s){
+    ws1s = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@aggTrade');
+    ws1s.onmessage = function(e){
+      try {
+        var d = JSON.parse(e.data);
+        var p = parseFloat(d.p), q = parseFloat(d.q);
+        var t = Math.floor(d.T / 1000) + 14400;
+        var isBuy = !d.m;  // m=false means buyer is taker = buy
+        
+        // Create/update 1-second candle
+        if(!secBars[t]){
+          secBars[t] = {t:t, o:p, h:p, l:p, c:p, v:q, bv:isBuy?q:0, sv:isBuy?0:q};
+        } else {
+          var c = secBars[t];
+          c.h = Math.max(c.h, p); c.l = Math.min(c.l, p); c.c = p;
+          c.v += q;
+          if(isBuy) c.bv += q; else c.sv += q;
+        }
+        
+        // Keep only last 5 minutes
+        var cutoff = t - 300;
+        Object.keys(secBars).forEach(function(k){
+          if(parseInt(k) < cutoff) delete secBars[k];
+        });
+        
+        render1sBars();
+        document.getElementById('pr').textContent = '$'+p.toLocaleString();
+      } catch(e2){}
+    };
+    ws1s.onclose = function(){setTimeout(function(){ws1s = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@aggTrade');},3000);};
+  }
+}
+
+function render1sBars(){
+  var bars = Object.values(secBars).sort(function(a,b){return a.t-b.t;});
+  if(!bars.length) return;
+  
+  var data = bars.map(function(x){return{time:x.t, open:x.o, high:x.h, low:x.l, close:x.c};});
+  mainS.setData(data);
+  
+  volS.setData(bars.map(function(x){return{time:x.t, value:x.v, color:'rgba(38,166,154,0.3)'};}));
+  
+  delS.setData(bars.map(function(x){
+    var del = x.bv - x.sv;
+    return{time:x.t, value:Math.abs(del), color:del>=0?'rgba(38,166,154,0.3)':'rgba(239,83,80,0.3)'};
+  }));
+  
+  chart.timeScale().fitContent();
+  curData = bars;
+  
+  var last = bars[bars.length-1];
+  document.getElementById('pr').textContent = '$'+last.c.toLocaleString();
+}
+
+function updatePrice(d){
+  if(!d||!d.length) return;
+  var last = d[d.length-1], prev = d.length>1 ? d[d.length-2].c : last.c;
+  // For data with 'c' field (aggregated format)
+  var lc = last.c || last.close;
+  var pc = prev.c || prev.close || lc;
+  var ch = (lc-pc)/pc*100;
+  document.getElementById('pr').textContent = '$'+lc.toLocaleString();
+  document.getElementById('cg').textContent = (ch>0?'+':'')+ch.toFixed(2)+'%';
+  document.getElementById('cg').className = ch>=0?'gn':'rd';
 }
 
 // Futures data
@@ -173,27 +239,10 @@ function loadFut(){
   });
 }
 
-// WebSocket live
-var ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
-ws.onmessage = function(e){
-  try {
-    var d = JSON.parse(e.data), p = parseFloat(d.p);
-    document.getElementById('pr').textContent = '$'+p.toLocaleString();
-    if(curData.length){
-      var last = curData[curData.length-1];
-      last.high = Math.max(last.high, p);
-      last.low = Math.min(last.low, p);
-      last.close = p;
-      mainS.update({time:last.time,open:last.open,high:last.high,low:last.low,close:last.close});
-    }
-  } catch(e2){}
-};
-ws.onclose = function(){setTimeout(function(){ws=new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');},3000);};
+window.onresize = function(){chart.applyOptions({width:window.innerWidth,height:window.innerHeight-56});};
 
-window.onresize = function(){chart.applyOptions({width:window.innerWidth,height:window.innerHeight-62});};
-
-initChart();
-loadData('1D');
+initC();
+loadTF('1D');
 loadFut();
 setInterval(loadFut, 30000);
 </script>
