@@ -19,7 +19,7 @@ body{margin:0;background:#0d1117;color:#c9d1d9;font-family:system-ui;overflow:hi
 <body>
 <div class="h">
   <h1>🐉 BTC</h1>
-  <span id="pd">--</span>
+  <span id="pd">Yukleniyor...</span>
   <span id="ch"></span>
   <div class="tf">
     <button data-i="1d" class="on">Gun</button>
@@ -29,7 +29,7 @@ body{margin:0;background:#0d1117;color:#c9d1d9;font-family:system-ui;overflow:hi
 </div>
 <div id="ct"></div>
 <script>
-var ch,cs;
+var ch,cs,curData=[];
 
 function init(){
   ch=LightweightCharts.createChart(document.getElementById('ct'),{
@@ -41,42 +41,34 @@ function init(){
   cs=ch.addCandlestickSeries({upColor:'#3fb950',downColor:'#f85149',borderVisible:false,wickUpColor:'#3fb950',wickDownColor:'#f85149'});
 }
 
-function load(iv,lim){
+function load(iv){
   var intv={1d:'1d',1h:'1h',1m:'1m'}[iv];
-  var lims={1d:365,1h:168,1m:100};
-  var l=lim||lims[iv];
+  var lim={1d:365,1h:168,1m:100}[iv];
   
-  fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval='+intv+'&limit='+l)
+  fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval='+intv+'&limit='+lim)
   .then(function(r){return r.json();})
   .then(function(k){
-    var data=k.map(function(c){
-      return{
-        time:Math.floor(c[0]/1000),
-        open:parseFloat(c[1]),
-        high:parseFloat(c[2]),
-        low:parseFloat(c[3]),
-        close:parseFloat(c[4])
-      };
-    });
-    
-    cs.setData(data);
+    curData=k.map(function(c){return{time:Math.floor(c[0]/1000),open:+c[1],high:+c[2],low:+c[3],close:+c[4]};});
+    cs.setData(curData);
     ch.timeScale().fitContent();
-    
-    var last=data[data.length-1];
-    var prev=data.length>1?data[data.length-2].close:last.close;
-    var change=(last.close-prev)/prev*100;
-    
-    document.getElementById('pd').textContent='$'+last.close.toLocaleString();
-    document.getElementById('ch').textContent=(change>0?'+':'')+change.toFixed(2)+'%';
-    document.getElementById('ch').className=change>=0?'grn':'red';
+    updateDisplay(curData);
   });
 }
 
-// Init
+function updateDisplay(data){
+  if(!data||!data.length)return;
+  var last=data[data.length-1];
+  var prev=data.length>1?data[data.length-2].close:last.close;
+  var change=(last.close-prev)/prev*100;
+  document.getElementById('pd').textContent='$'+last.close.toLocaleString();
+  document.getElementById('ch').textContent=(change>0?'+':'')+change.toFixed(2)+'%';
+  document.getElementById('ch').className=change>=0?'grn':'red';
+}
+
 init();
 load('1d');
 
-// Timeframe buttons
+// Timeframe
 document.querySelectorAll('.tf button').forEach(function(b){
   b.onclick=function(){
     document.querySelectorAll('.tf button').forEach(function(x){x.classList.remove('on');});
@@ -85,17 +77,23 @@ document.querySelectorAll('.tf button').forEach(function(b){
   };
 });
 
-// WebSocket
+// WebSocket - live price update
 var ws=new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
 ws.onmessage=function(e){
   try{
-    var d=JSON.parse(e.data);
-    document.getElementById('pd').textContent='$'+parseFloat(d.p).toLocaleString();
+    var d=JSON.parse(e.data),p=parseFloat(d.p);
+    document.getElementById('pd').textContent='$'+p.toLocaleString();
+    // Update last candle in real-time
+    if(curData.length){
+      var last=curData[curData.length-1];
+      last.high=Math.max(last.high,p);
+      last.low=Math.min(last.low,p);
+      last.close=p;
+      cs.update(last);
+    }
   }catch(e2){}
 };
-ws.onclose=function(){setTimeout(function(){
-  ws=new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
-},3000);};
+ws.onclose=function(){setTimeout(function(){ws=new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');},3000);};
 
 window.onresize=function(){ch.applyOptions({width:window.innerWidth,height:window.innerHeight-42});};
 </script>
