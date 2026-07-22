@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Trader Hova - Live</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0d1117;color:#c9d1d9;font-family:'Segoe UI',sans-serif;padding:20px}
+h1{color:#58a6ff;margin-bottom:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:15px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px}
+.card h3{color:#58a6ff;font-size:14px;margin-bottom:10px}
+.val{font-size:24px;font-weight:bold}
+.green{color:#3fb950}
+.red{color:#f85149}
+.neutral{color:#8b949e}
+.small{font-size:12px;color:#8b949e;margin-top:5px}
+.signal{display:inline-block;padding:4px 12px;border-radius:12px;font-size:14px;font-weight:bold}
+</style>
+</head>
+<body>
+<h1>🐉 Trader Hova — Live Data</h1>
+<div class="grid" id="data">
+  <div class="card"><h3>BTC/USDT</h3><div class="val" id="btcPrice">---</div><div class="small" id="btcChange"></div></div>
+  <div class="card"><h3>ETH/USDT</h3><div class="val" id="ethPrice">---</div><div class="small" id="ethChange"></div></div>
+  <div class="card"><h3>Piyasa Değeri</h3><div class="val" id="mcap">---</div><div class="small">Market Cap</div></div>
+  <div class="card"><h3>24s Hacim</h3><div class="val" id="volume">---</div><div class="small">BTC Volume</div></div>
+  <div class="card"><h3>ATH</h3><div class="val" id="ath">---</div><div class="small">All Time High</div></div>
+  <div class="card"><h3>Sinyal</h3><div id="signal">---</div><div class="small">Anlik durum</div></div>
+</div>
+<div class="small" style="margin-top:20px;color:#484f58" id="updated">Son guncelleme: --</div>
+
+<script>
+async function loadData() {
+  const res = await fetch('data/live_status.json');
+  const d = await res.json();
+  
+  if(d.prices) {
+    document.getElementById('btcPrice').textContent = '$' + Number(d.prices.btc).toLocaleString();
+    document.getElementById('btcPrice').className = 'val ' + (d.prices.btc_change >= 0 ? 'green' : 'red');
+    document.getElementById('btcChange').textContent = (d.prices.btc_change >= 0 ? '+' : '') + d.prices.btc_change.toFixed(2) + '% (24h)';
+    
+    document.getElementById('ethPrice').textContent = '$' + Number(d.prices.eth).toLocaleString();
+    document.getElementById('ethPrice').className = 'val ' + (d.prices.eth_change >= 0 ? 'green' : 'red');
+    document.getElementById('ethChange').textContent = (d.prices.eth_change >= 0 ? '+' : '') + d.prices.eth_change.toFixed(2) + '% (24h)';
+  }
+  
+  if(d.ticker) {
+    const mc = d.ticker.market_cap;
+    document.getElementById('mcap').textContent = '$' + (mc/1e9).toFixed(2) + 'B';
+    document.getElementById('volume').textContent = (d.ticker.volume_24h/1e9).toFixed(2) + 'B USD';
+    document.getElementById('ath').textContent = '$' + Number(d.ticker.ath).toLocaleString();
+  }
+  
+  if(d.signal) {
+    const el = document.getElementById('signal');
+    el.innerHTML = '<span class="signal ' + d.signal + '">' + d.signal.toUpperCase() + '</span>';
+  }
+  
+  document.getElementById('updated').textContent = 'Son guncelleme: ' + (d.updated || '--');
+}
+loadData();
+setInterval(loadData, 30000);
+</script>
+</body>
+</html>
