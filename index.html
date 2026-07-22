@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>BTC</title>
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
@@ -23,13 +22,14 @@ body{margin:0;background:#0d1117;color:#c9d1d9;font-family:system-ui;overflow:hi
   <span id="p">--</span>
   <span id="ch"></span>
   <div class="t">
-    <button class="on" data-d="daily">Gün</button>
-    <button data-d="1m">1dk</button>
+    <button data-t="daily" class="on">Günlük</button>
+    <button data-t="1h">1 saat</button>
+    <button data-t="1m">1 dk</button>
   </div>
 </div>
 <div id="ct"></div>
 <script>
-var chart = LightweightCharts.createChart(document.getElementById('ct'), {
+var chart = LightweightCharts.createChart(document.getElementById('ct'),{
   layout:{textColor:'#8b949e',background:{color:'#0d1117'}},
   grid:{vertLines:{color:'#161b22'},horzLines:{color:'#161b22'}},
   timeScale:{borderColor:'#30363d',timeVisible:true,secondsVisible:false},
@@ -38,62 +38,78 @@ var series = chart.addCandlestickSeries({
   upColor:'#3fb950',downColor:'#f85149',borderVisible:false,
   wickUpColor:'#3fb950',wickDownColor:'#f85149',
 });
+var lastClose = 0;
 
-// Load daily data from our JSON file
-fetch('data/btc_daily.json').then(function(r){ return r.json(); }).then(function(d){
-  var data = d.map(function(c){
-    return {time:c.time, open:c.open, high:c.high, low:c.low, close:c.close};
+function loadDaily(){
+  fetch('data/btc_daily.json').then(function(r){return r.json();}).then(function(d){
+    var data = d.map(function(c){return {time:c.time, open:c.open, high:c.high, low:c.low, close:c.close};});
+    series.setData(data);
+    chart.timeScale().fitContent();
+    updatePrice(data);
   });
-  series.setData(data);
-  chart.timeScale().fitContent();
-  
+}
+
+function loadHourly(){
+  fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=168').then(function(r){return r.json();}).then(function(k){
+    var data = k.map(function(c){return {time:Math.floor(c[0]/1000), open:+c[1], high:+c[2], low:+c[3], close:+c[4]};});
+    series.setData(data);
+    chart.timeScale().fitContent();
+    updatePrice(data);
+  }).catch(function(){loadDaily();});
+}
+
+function loadMinute(){
+  fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=120').then(function(r){return r.json();}).then(function(k){
+    var data = k.map(function(c){return {time:Math.floor(c[0]/1000), open:+c[1], high:+c[2], low:+c[3], close:+c[4]};});
+    series.setData(data);
+    chart.timeScale().fitContent();
+    updatePrice(data);
+  }).catch(function(){loadDaily();});
+}
+
+function updatePrice(data){
+  if(!data || !data.length) return;
   var last = data[data.length-1];
+  var prev = data.length>1 ? data[data.length-2].close : last.close;
+  var ch = (last.close - prev)/prev*100;
   document.getElementById('p').textContent = '$'+last.close.toLocaleString();
-  var prev = data[data.length-2].close;
-  var ch = (last.close-prev)/prev*100;
   document.getElementById('ch').textContent = (ch>0?'+':'')+ch.toFixed(2)+'%';
   document.getElementById('ch').className = ch>=0?'g':'r';
-}).catch(function(e){
-  document.getElementById('p').textContent = 'Veri yüklenemedi';
+  lastClose = last.close;
+}
+
+// Timeframe buttons
+document.querySelectorAll('.t button').forEach(function(b){
+  b.onclick = function(){
+    document.querySelectorAll('.t button').forEach(function(x){x.classList.remove('on');});
+    b.classList.add('on');
+    if(b.dataset.t==='daily') loadDaily();
+    else if(b.dataset.t==='1h') loadHourly();
+    else if(b.dataset.t==='1m') loadMinute();
+  };
 });
 
 // WebSocket for live price
 var ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
 ws.onmessage = function(e){
   try{
-    var d = JSON.parse(e.data);
-    var p = parseFloat(d.p);
+    var d=JSON.parse(e.data), p=parseFloat(d.p);
     document.getElementById('p').textContent = '$'+p.toLocaleString();
+    if(lastClose){
+      var ch = (p-lastClose)/lastClose*100;
+      document.getElementById('ch').textContent = (ch>0?'+':'')+ch.toFixed(2)+'%';
+      document.getElementById('ch').className = ch>=0?'g':'r';
+    }
   }catch(e2){}
 };
-ws.onclose = function(){ setTimeout(function(){
+ws.onclose = function(){setTimeout(function(){
   ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
-}, 3000); };
+},3000);};
 
-// Timeframe toggle
-document.querySelectorAll('.t button').forEach(function(b){
-  b.onclick = function(){
-    document.querySelectorAll('.t button').forEach(function(x){ x.classList.remove('on'); });
-    b.classList.add('on');
-    if(b.dataset.d === '1m'){
-      // Try to load 1m data
-      fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=100').then(function(r){ return r.json(); }).then(function(k){
-        var d = k.map(function(c){ return {time:Math.floor(c[0]/1000), open:+c[1], high:+c[2], low:+c[3], close:+c[4]}; });
-        series.setData(d);
-        chart.timeScale().fitContent();
-      }).catch(function(){});
-    } else {
-      fetch('data/btc_daily.json').then(function(r){ return r.json(); }).then(function(d){
-        series.setData(d.map(function(c){ return {time:c.time, open:c.open, high:c.high, low:c.low, close:c.close}; }));
-        chart.timeScale().fitContent();
-      });
-    }
-  };
-});
+window.onresize = function(){chart.applyOptions({width:window.innerWidth, height:window.innerHeight-38});};
 
-window.onresize = function(){
-  chart.applyOptions({width:window.innerWidth, height:window.innerHeight-38});
-};
+// Start
+loadDaily();
 </script>
 </body>
 </html>
