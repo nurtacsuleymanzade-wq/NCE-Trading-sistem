@@ -52,7 +52,7 @@ chart.priceScale('volume').applyOptions({
   scaleMargins: { top: 0.8, bottom: 0 },
 });
 
-fetch('data/btc_daily.json')
+fetch('btc_daily.json')
   .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
   .then(data => {
     document.getElementById('loadingMsg').style.display = 'none';
