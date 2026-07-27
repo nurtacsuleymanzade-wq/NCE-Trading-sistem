@@ -48,6 +48,7 @@ var SRV = 'https://surveillance-damages-gym-harper.trycloudflare.com/chart';
 var curTF = '1D', curData = [], chart, cs, vs, ds, tip = document.getElementById('tip');
 var pan = {vol:true, del:true};
 var ws1s = null;
+var oneSecondBars = {};
 
 // === TIMEFRAME BUTTONS ===
 var tb = document.getElementById('tf');
@@ -67,7 +68,7 @@ function init(){
   chart = LightweightCharts.createChart(document.getElementById('ct'),{
     layout:{textColor:'#8b949e',background:{color:'#0d1117'}},
     grid:{vertLines:{color:'#161b22'},horzLines:{color:'#161b22'}},
-    timeScale:{borderColor:'#30363d',timeVisible:false,secondsVisible:false},
+    timeScale:{borderColor:'#30363d',timeVisible:true,secondsVisible:true},
     rightPriceScale:{borderColor:'#30363d'},
   });
 
@@ -116,14 +117,26 @@ function resizeC(){
 // === DATA LOADING ===
 function klineToBar(c){
   var o=+c[1], h=+c[2], l=+c[3], cl=+c[4], v=+c[5], bv=+c[9];
-  return {t:Math.floor(c[0]/1000)+14400,o:o,h:h,l:l,c:cl,v:v,bv:bv};
+  return {t:Math.floor(c[0]/1000),o:o,h:h,l:l,c:cl,v:v,bv:bv};
+}
+function visibleBars(tf){
+  return {'1s':120,'1m':180,'5m':180,'15m':160,'30m':140,'1h':120,'4h':100,'1D':120,'3D':90}[tf] || 120;
+}
+function applyViewport(tf, len){
+  if(!len) return;
+  var bars = Math.min(visibleBars(tf), len);
+  chart.timeScale().setVisibleLogicalRange({from:Math.max(0, len-bars)-1, to:len+5});
+}
+function setSeries(list, tf){
+  cs.setData(list.map(function(x){return{time:x.t,open:x.o,high:x.h,low:x.l,close:x.c};}));
+  vs.setData(list.map(function(x){return{time:x.t,value:x.v||0,color:'rgba(38,166,154,0.3)'};}));
+  ds.setData(list.map(function(x){var d=(x.bv||0)*2-(x.v||0);return{time:x.t,value:Math.abs(d),color:d>=0?'rgba(38,166,154,0.3)':'rgba(239,83,80,0.3)'};}));
+  applyViewport(tf || curTF, list.length);
 }
 function renderData(data){
   curData = data.filter(function(x){ return x && x.t && x.o && x.h && x.l && x.c; });
-  cs.setData(curData.map(function(x){return{time:x.t,open:x.o,high:x.h,low:x.l,close:x.c};}));
-  vs.setData(curData.map(function(x){return{time:x.t,value:x.v||0,color:'rgba(38,166,154,0.3)'};}));
-  ds.setData(curData.map(function(x){var d=(x.bv||0)*2-(x.v||0);return{time:x.t,value:Math.abs(d),color:d>=0?'rgba(38,166,154,0.3)':'rgba(239,83,80,0.3)'};}));
-  chart.timeScale().fitContent();
+  setSeries(curData, curTF);
+  window.__nceDebug = {tf:curTF, bars:curData.length, first:curData[0]&&curData[0].t, last:curData[curData.length-1]&&curData[curData.length-1].t, visible:chart.timeScale().getVisibleLogicalRange()};
 }
 function agg3d(days){
   var out=[];
@@ -158,7 +171,7 @@ function loadLocalDaily(tf){
 }
 function loadTF(tf){
   if(tf==='1s'){ load1s(); return; }
-  if(ws1s){ws1s.close();ws1s=null;}
+  if(ws1s){ws1s.onclose=null;ws1s.close();ws1s=null;}
   loadFromBinance(tf).catch(function(e){
     loadLocalDaily(tf).catch(function(){ document.getElementById('pr').textContent='Err: '+e.message; });
   });
@@ -204,26 +217,38 @@ function showStats(tf, d){
 
 // === 1-SECOND BARS ===
 function load1s(){
-  curData=[]; if(ws1s) return;
+  curData=[]; oneSecondBars={};
+  renderData([]);
+  fetch(BIN+'/api/v3/aggTrades?symbol=BTCUSDT&limit=1000')
+    .then(function(r){ if(!r.ok) throw Error('aggTrades HTTP '+r.status); return r.json(); })
+    .then(function(rows){ rows.forEach(function(d){ add1sTrade(+d.T,+d.p,+d.q,!d.m); }); flush1s(); })
+    .catch(function(){});
+  if(ws1s){ws1s.onclose=null;ws1s.close();ws1s=null;}
+  open1sSocket();
+}
+function add1sTrade(ms, p, q, buy){
+  var t=Math.floor(ms/1000);
+  if(!oneSecondBars[t]){ oneSecondBars[t]={t:t,o:p,h:p,l:p,c:p,v:q,bv:buy?q:0,sv:buy?0:q}; }
+  else { var c=oneSecondBars[t]; c.h=Math.max(c.h,p);c.l=Math.min(c.l,p);c.c=p;c.v+=q;if(buy)c.bv+=q;else c.sv+=q; }
+  var cut=t-600; Object.keys(oneSecondBars).forEach(function(k){if(+k<cut)delete oneSecondBars[k];});
+}
+function flush1s(){
+  var list=Object.values(oneSecondBars).sort(function(a,b){return a.t-b.t;});
+  if(!list.length) return;
+  curData=list;
+  setSeries(list, '1s');
+  showPrice(curData); showStats('1s', curData);
+  window.__nceDebug = {tf:'1s', bars:curData.length, first:curData[0]&&curData[0].t, last:curData[curData.length-1]&&curData[curData.length-1].t, visible:chart.timeScale().getVisibleLogicalRange()};
+}
+function open1sSocket(){
   ws1s = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@aggTrade');
-  var bars={};
   ws1s.onmessage = function(e){
     try {
-      var d=JSON.parse(e.data), p=+d.p, q=+d.q, t=Math.floor(d.T/1000)+14400, buy=!d.m;
-      if(!bars[t]){ bars[t]={t:t,o:p,h:p,l:p,c:p,v:q,bv:buy?q:0,sv:buy?0:q}; }
-      else { var c=bars[t]; c.h=Math.max(c.h,p);c.l=Math.min(c.l,p);c.c=p;c.v+=q;if(buy)c.bv+=q;else c.sv+=q; }
-      var cut=t-300; Object.keys(bars).forEach(function(k){if(+k<cut)delete bars[k];});
-      var list=Object.values(bars).sort(function(a,b){return a.t-b.t;});
-      if(!list.length) return;
-      curData=list;
-      cs.setData(list.map(function(x){return{time:x.t,open:x.o,high:x.h,low:x.l,close:x.c};}));
-      vs.setData(list.map(function(x){return{time:x.t,value:x.v,color:'rgba(38,166,154,0.3)'};}));
-      ds.setData(list.map(function(x){var d2=x.bv-x.sv;return{time:x.t,value:Math.abs(d2),color:d2>=0?'rgba(38,166,154,0.3)':'rgba(239,83,80,0.3)'};}));
-      chart.timeScale().fitContent();
-      document.getElementById('pr').textContent='$'+p.toLocaleString();
+      var d=JSON.parse(e.data), p=+d.p, q=+d.q, buy=!d.m;
+      add1sTrade(+d.T, p, q, buy); flush1s();
     } catch(e2){}
   };
-  ws1s.onclose=function(){setTimeout(function(){ws1s=new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@aggTrade');},3000);};
+  ws1s.onclose=function(){ if(curTF==='1s') setTimeout(open1sSocket,3000); };
 }
 
 // === GLOBAL WEBSOCKET (price only) ===
