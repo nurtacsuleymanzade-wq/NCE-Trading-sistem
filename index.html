@@ -109,56 +109,59 @@ function updBar(){
 function resizeC(){
   var vh=pan.vol?0.25:0, dh=pan.del?0.15:0, mh=1-vh-dh;
   chart.priceScale('right').applyOptions({scaleMargins:{top:0,bottom:vh+dh}});
-  chart.priceScale('vol').applyOptions({scaleMargins:{top:1-vh-dh,bottom:dh+0.01}});
-  chart.priceScale('del').applyOptions({scaleMargins:{top:1-dh,bottom:0.01}});
+  chart.priceScale('vol').applyOptions({scaleMargins:{top:1-vh-dh,bottom:dh}});
+  chart.priceScale('del').applyOptions({scaleMargins:{top:1-dh,bottom:0}});
 }
 
 // === DATA LOADING ===
+function klineToBar(c){
+  var o=+c[1], h=+c[2], l=+c[3], cl=+c[4], v=+c[5], bv=+c[9];
+  return {t:Math.floor(c[0]/1000)+14400,o:o,h:h,l:l,c:cl,v:v,bv:bv};
+}
+function renderData(data){
+  curData = data.filter(function(x){ return x && x.t && x.o && x.h && x.l && x.c; });
+  cs.setData(curData.map(function(x){return{time:x.t,open:x.o,high:x.h,low:x.l,close:x.c};}));
+  vs.setData(curData.map(function(x){return{time:x.t,value:x.v||0,color:'rgba(38,166,154,0.3)'};}));
+  ds.setData(curData.map(function(x){var d=(x.bv||0)*2-(x.v||0);return{time:x.t,value:Math.abs(d),color:d>=0?'rgba(38,166,154,0.3)':'rgba(239,83,80,0.3)'};}));
+  chart.timeScale().fitContent();
+}
+function agg3d(days){
+  var out=[];
+  for(var i=0;i<days.length;i+=3){
+    var g=days.slice(i,i+3); if(!g.length) continue;
+    var v=0,bv=0,hi=-Infinity,lo=Infinity;
+    g.forEach(function(x){ v+=x.v||0; bv+=x.bv||0; if(x.h>hi)hi=x.h; if(x.l<lo)lo=x.l; });
+    out.push({t:g[0].t,o:g[0].o,h:hi,l:lo,c:g[g.length-1].c,v:v,bv:bv});
+  }
+  return out;
+}
+function loadFromBinance(tf){
+  var intv = {'1m':'1m','5m':'5m','15m':'15m','30m':'30m','1h':'1h','4h':'4h','1D':'1d','3D':'1d'}[tf] || '1d';
+  var lim = {'1m':1000,'5m':1000,'15m':1000,'30m':1000,'1h':1000,'4h':1000,'1D':365,'3D':365}[tf] || 365;
+  return fetch(BIN+'/api/v3/klines?symbol=BTCUSDT&interval='+intv+'&limit='+lim)
+    .then(function(r){ if(!r.ok) throw Error('Binance HTTP '+r.status); return r.json(); })
+    .then(function(k){
+      var data = k.map(klineToBar);
+      if(tf==='3D') data = agg3d(data);
+      renderData(data); showPrice(curData); showStats(tf, curData);
+    });
+}
+function loadLocalDaily(tf){
+  if(tf!=='1D' && tf!=='3D') throw Error('no local fallback for '+tf);
+  return fetch('data/btc_daily.json')
+    .then(function(r){ if(!r.ok) throw Error('Local HTTP '+r.status); return r.json(); })
+    .then(function(k){
+      var data = k.map(function(x){return{t:x.time,o:x.open,h:x.high,l:x.low,c:x.close,v:x.volume||0,bv:(x.volume||0)/2};});
+      if(tf==='3D') data = agg3d(data);
+      renderData(data); showPrice(curData); showStats(tf, curData);
+    });
+}
 function loadTF(tf){
   if(tf==='1s'){ load1s(); return; }
   if(ws1s){ws1s.close();ws1s=null;}
-  
-  var fn = {'1m':'1m','5m':'5m','15m':'15m','30m':'30m','1h':'1h','4h':'4h','1D':'1d','3D':'3d'}[tf]||'1d';
-  
-  // Step 1: Load archive
-  fetch(SRV+'/data/bars_'+fn+'.json')
-  .then(function(r){ if(!r.ok) throw Error('HTTP '+r.status); return r.json(); })
-  .then(function(arch){
-    // Convert archive format
-    var data = arch.map(function(x){return{t:x.t,o:x.o,h:x.h,l:x.l,c:x.c,v:x.v,bv:x.bv};});
-    var chartData = data.map(function(x){return{time:x.t,open:x.o,high:x.h,low:x.l,close:x.c};});
-    cs.setData(chartData);
-    vs.setData(data.map(function(x){return{time:x.t,value:x.v,color:'rgba(38,166,154,0.3)'};}));
-    ds.setData(data.map(function(x){var d=x.bv*2-x.v;return{time:x.t,value:Math.abs(d),color:d>=0?'rgba(38,166,154,0.3)':'rgba(239,83,80,0.3)'};}));
-    chart.timeScale().fitContent();
-    curData = data;
-    
-    // Step 2: Supplement with latest
-    var binInt = {'1m':'1m','5m':'5m','15m':'15m','30m':'30m','1h':'1h','4h':'4h','1D':'1d','3D':'1d'}[tf]||'1d';
-    var lim = (tf==='1D'||tf==='3D')?30:100;
-    fetch(BIN+'/api/v3/klines?symbol=BTCUSDT&interval='+binInt+'&limit='+lim)
-    .then(function(r){return r.json();})
-    .then(function(k){
-      k.forEach(function(c){
-        var t=Math.floor(c[0]/1000)+14400;
-        if(t > (curData.length?curData[curData.length-1].t:0)){
-          var o=+c[1],h=+c[2],l=+c[3],cl=+c[4],v=+c[5],bv=+c[9];
-          curData.push({t:t,o:o,h:h,l:l,c:cl,v:v,bv:bv});
-        }
-      });
-      if(curData.length > data.length){
-        var cd = curData.map(function(x){return{time:x.t,open:x.o,high:x.h,low:x.l,close:x.c};});
-        cs.setData(cd);
-        vs.setData(curData.map(function(x){return{time:x.t,value:x.v,color:'rgba(38,166,154,0.3)'};}));
-        ds.setData(curData.map(function(x){var d=x.bv*2-x.v;return{time:x.t,value:Math.abs(d),color:d>=0?'rgba(38,166,154,0.3)':'rgba(239,83,80,0.3)'};}));
-        chart.timeScale().fitContent();
-      }
-      showPrice(curData);
-      showStats(tf, curData);
-    })
-    .catch(function(){ showPrice(data); showStats(tf, data); });
-  })
-  .catch(function(e){ document.getElementById('pr').textContent='Err: '+e.message; });
+  loadFromBinance(tf).catch(function(e){
+    loadLocalDaily(tf).catch(function(){ document.getElementById('pr').textContent='Err: '+e.message; });
+  });
 }
 
 function showPrice(d){
@@ -180,15 +183,20 @@ function showStats(tf, d){
   document.getElementById('n24').innerHTML='<b>$'+hi.toLocaleString()+'</b>';
   document.getElementById('x24').innerHTML='<b>$'+lo.toLocaleString()+'</b>';
   
-  Promise.all([
-    fetch(BIN+'/fapi/v1/openInterest?symbol=BTCUSDT'),
-    fetch(BIN+'/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1'),
-    fetch(BIN+'/futures/data/globalLongShortAccountRatio?symbol=BTCUSDT&period=1d'),
-  ]).then(function(r){return Promise.all(r.map(function(x){return x.json();}));})
-  .then(function(d2){
-    document.getElementById('oi').innerHTML='<b>'+(parseFloat(d2[0].openInterest)/1000).toFixed(1)+'K</b>';
-    document.getElementById('fd').innerHTML='<b>'+(parseFloat(d2[1][0]?.fundingRate||0)*100).toFixed(4)+'%</b>';
-    document.getElementById('ls').innerHTML='<b>'+parseFloat(d2[2][0]?.longShortRatio||1).toFixed(2)+'</b>';
+  fetch(BIN+'/api/v3/ticker/24hr?symbol=BTCUSDT')
+  .then(function(r){ if(!r.ok) throw Error('ticker HTTP '+r.status); return r.json(); })
+  .then(function(tk){
+    document.getElementById('n24').innerHTML='<b>$'+parseFloat(tk.highPrice).toLocaleString()+'</b>';
+    document.getElementById('x24').innerHTML='<b>$'+parseFloat(tk.lowPrice).toLocaleString()+'</b>';
+    document.getElementById('oi').innerHTML='<b>spot</b>';
+    document.getElementById('fd').innerHTML='<b>n/a</b>';
+    document.getElementById('ls').innerHTML='<b>n/a</b>';
+    var mp=d.slice(-10).reduce(function(s,x){return s+x.c;},0)/Math.min(10,d.length);
+    document.getElementById('mp').innerHTML='<b>$'+mp.toFixed(0)+'</b>';
+  }).catch(function(){
+    document.getElementById('oi').innerHTML='<b>spot</b>';
+    document.getElementById('fd').innerHTML='<b>n/a</b>';
+    document.getElementById('ls').innerHTML='<b>n/a</b>';
     var mp=d.slice(-10).reduce(function(s,x){return s+x.c;},0)/Math.min(10,d.length);
     document.getElementById('mp').innerHTML='<b>$'+mp.toFixed(0)+'</b>';
   });
