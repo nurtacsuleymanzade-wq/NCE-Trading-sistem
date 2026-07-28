@@ -5,7 +5,7 @@ Verifies quote-volume invariants, closed/provisional event gating, and real
 non-repaint behavior under open-candle mutation + closed replay/restart.
 """
 from __future__ import annotations
-import copy, hashlib, json, math, statistics
+import copy, hashlib, json, math, os, subprocess, sys, tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent
@@ -54,6 +54,31 @@ def event_signature(rows):
 
 def marker_signature(rows):
     return [(r["t"], tuple(r.get("events", []))) for r in rows if r.get("closed") and r.get("events")]
+
+
+def snapshot_closed(rows):
+    snap = []
+    for r in rows:
+        if not r.get("closed"):
+            continue
+        snap.append({
+            "timestamp": r["t"],
+            "OHLC": [round(r["o"], 12), round(r["h"], 12), round(r["l"], 12), round(r["c"], 12)],
+            "bv": round(r["bv"], 8),
+            "sv": round(r["sv"], 8),
+            "BuyLine": round(r.get("buyLine", 0), 12),
+            "SellLine": round(r.get("sellLine", 0), 12),
+            "events": list(r.get("events", [])),
+            "markers": list(r.get("events", [])) if r.get("events") else [],
+            "BX_SX": [e for e in r.get("events", []) if e in ("BX_CONFIRMED", "SX_CONFIRMED")],
+            "trapped": r.get("trapped", []),
+        })
+    return snap
+
+
+def write_calc_snapshot(in_path, out_path):
+    rows = json.loads(Path(in_path).read_text())
+    Path(out_path).write_text(json.dumps(snapshot_closed(calc_nai(rows)), sort_keys=True, separators=(",", ":")))
 
 
 def digest_closed(rows):
@@ -219,43 +244,57 @@ def real_non_repaint_tests():
         provisional_seen = provisional_seen or bool(last["provisionalEvents"])
         assert not any(e in last["events"] for e in ("BX_CONFIRMED", "SX_CONFIRMED"))
     NO_FINAL_MARKER_ON_PROVISIONAL = len(permanent_events_during_open) == 0 and len(set(marker_counts)) == 1 and provisional_seen
-    closed_rows = [synth_bar(open_t, 10000, 100, o=100, tr=10, response=-0.60, closed=True), synth_bar(open_t+1, 10000, 100, o=100, tr=10, response=-0.60, closed=True)]
-    finalized_calc = calc_nai(base + closed_rows)
-    finalized_row = finalized_calc[-1]
-    C = any(finalized_row["events"]) and (finalized_row["t"], tuple(finalized_row["events"])) in marker_signature(finalized_calc)
-    before_sig = event_signature(finalized_calc)
-    before_markers = marker_signature(finalized_calc)
-    before_digest = digest_closed(finalized_calc)
+
+    closed_rows = [
+        synth_bar(open_t, 10000, 100, o=100, tr=10, response=-0.60, closed=True),
+        synth_bar(open_t+1, 10000, 100, o=100, tr=10, response=-0.60, closed=True),
+    ]
     extended_rows = base + closed_rows
+    initial_calc = calc_nai(extended_rows)
+    finalized_row = initial_calc[-1]
+    target_ts = finalized_row["t"]
+    closed_snapshot = next(x for x in snapshot_closed(initial_calc) if x["timestamp"] == target_ts)
+    C = bool(finalized_row["events"]) and (finalized_row["t"], tuple(finalized_row["events"])) in marker_signature(initial_calc)
+
+    # Real closed immutability: freeze one closed candle snapshot, append five later CLOSED candles,
+    # recalculate full NAI, then locate the same timestamp and compare exact persisted fields.
     for j in range(1, 6):
         extended_rows.append(synth_bar(open_t + 1 + j, 1000 + j*10, 1000 + j*5, o=finalized_row["c"] + j*0.01, tr=10, response=0.0, closed=True))
-        ext_calc = calc_nai(extended_rows)
-        row = next(r for r in ext_calc if r["t"] == finalized_row["t"])
-        assert row["events"] == finalized_row["events"]
-        assert round(row["buyLine"], 12) == round(finalized_row["buyLine"], 12)
-        assert round(row["sellLine"], 12) == round(finalized_row["sellLine"], 12)
-        assert (finalized_row["t"], tuple(finalized_row["events"])) in marker_signature(ext_calc)
-    CLOSED_EVENT_IMMUTABILITY_PASS = C and before_sig == event_signature(finalized_calc) and before_markers == marker_signature(finalized_calc)
-    replay1 = calc_nai(copy.deepcopy(extended_rows))
-    replay2 = calc_nai(json.loads(json.dumps(extended_rows, sort_keys=True)))
-    RESTART_REPLAY_MATCH = json.dumps(event_signature(replay1), sort_keys=True, separators=(",", ":")) == json.dumps(event_signature(replay2), sort_keys=True, separators=(",", ":")) and digest_closed(replay1) == digest_closed(replay2)
+    extended_calc = calc_nai(extended_rows)
+    replayed_snapshot = next(x for x in snapshot_closed(extended_calc) if x["timestamp"] == target_ts)
+    CLOSED_SNAPSHOT_IMMUTABILITY_PASS = C and closed_snapshot == replayed_snapshot
+
+    # Real process restart/replay: run two separate Python interpreter processes, loading the same
+    # closed-history JSON and serializing the same closed snapshot set.
+    with tempfile.TemporaryDirectory(prefix="nce-restart-") as td:
+        in_file = Path(td) / "history.json"
+        out1 = Path(td) / "snapshot1.json"
+        out2 = Path(td) / "snapshot2.json"
+        in_file.write_text(json.dumps(extended_rows, sort_keys=True, separators=(",", ":")))
+        subprocess.run([sys.executable, str(Path(__file__).resolve()), "--snapshot", str(in_file), str(out1)], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        subprocess.run([sys.executable, str(Path(__file__).resolve()), "--snapshot", str(in_file), str(out2)], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        PROCESS_RESTART_REPLAY_MATCH = out1.read_text() == out2.read_text()
+
     OPEN_CANDLE_MUTATION_PASS = NO_FINAL_MARKER_ON_PROVISIONAL and provisional_seen
     return {
         "OPEN_CANDLE_MUTATION_PASS": OPEN_CANDLE_MUTATION_PASS,
-        "CLOSED_EVENT_IMMUTABILITY_PASS": CLOSED_EVENT_IMMUTABILITY_PASS,
-        "RESTART_REPLAY_MATCH": RESTART_REPLAY_MATCH,
+        "CLOSED_SNAPSHOT_IMMUTABILITY_PASS": CLOSED_SNAPSHOT_IMMUTABILITY_PASS,
+        "PROCESS_RESTART_REPLAY_MATCH": PROCESS_RESTART_REPLAY_MATCH,
         "NO_FINAL_MARKER_ON_PROVISIONAL": NO_FINAL_MARKER_ON_PROVISIONAL,
-        "finalized_timestamp": finalized_row["t"],
+        "finalized_timestamp": target_ts,
         "finalized_events": finalized_row["events"],
-        "closed_digest": before_digest,
+        "closed_snapshot_fields": list(closed_snapshot.keys()),
+        "closed_snapshot": closed_snapshot,
         "open_mutations": 10,
         "post_close_bars_checked": 5,
     }
 
-
 if __name__ == "__main__":
+    if len(sys.argv) == 4 and sys.argv[1] == "--snapshot":
+        write_calc_snapshot(sys.argv[2], sys.argv[3])
+        raise SystemExit(0)
     run_unit_tests()
     data_result = verify_data()
     repaint = real_non_repaint_tests()
-    assert all(repaint[k] is True for k in ["OPEN_CANDLE_MUTATION_PASS", "CLOSED_EVENT_IMMUTABILITY_PASS", "RESTART_REPLAY_MATCH", "NO_FINAL_MARKER_ON_PROVISIONAL"]), repaint
+    assert all(repaint[k] is True for k in ["OPEN_CANDLE_MUTATION_PASS", "CLOSED_SNAPSHOT_IMMUTABILITY_PASS", "PROCESS_RESTART_REPLAY_MATCH", "NO_FINAL_MARKER_ON_PROVISIONAL"]), repaint
     print(json.dumps({"ok": True, **data_result, "repaint": repaint}, indent=2, ensure_ascii=False))

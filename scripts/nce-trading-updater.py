@@ -189,9 +189,12 @@ def git_commit_push(push=True):
         "data/btc_daily.json", "data/live_status.json",
     ]
     run(["git", "add", *data_files])
-    code, diff = run(["git", "diff", "--cached", "--quiet"])
-    if code == 0:
+    worktree_clean, _ = run(["git", "diff", "--quiet"])
+    index_clean, _ = run(["git", "diff", "--cached", "--quiet"])
+    if worktree_clean == 0 and index_clean == 0:
         return {"changed": False, "pushed": False, "message": "no data changes"}
+    if index_clean == 0:
+        return {"changed": False, "pushed": False, "message": "no staged data changes"}
 
     # If GitHub auth is missing, repeated 5-min updates must not create an infinite
     # local commit chain. Keep only one unpushed data commit by amending it.
