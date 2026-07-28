@@ -126,7 +126,25 @@ def update_klines():
     return counts
 
 
+def merge_bars(existing, incoming, keep_seconds=86400):
+    merged = {int(x["t"]): x for x in existing if x.get("t") is not None}
+    for x in incoming:
+        merged[int(x["t"])] = x
+    if not merged:
+        return []
+    newest = max(merged)
+    cutoff = newest - keep_seconds + 1
+    return [merged[k] for k in sorted(merged) if k >= cutoff]
+
+
 def update_1s():
+    """Refresh 1s archive without treating the last 1000 aggTrades as full history.
+
+    The WebSocket collector is the canonical long archive source. This REST step
+    only merges the latest closed seconds so updater runs do not shrink the
+    archive after collector has accumulated 60m/24h. Missing seconds remain
+    gaps; no fake zero-volume bars are generated.
+    """
     rows = fetch_json(f"{API}{API_PATH_PREFIX}/aggTrades?symbol={SYMBOL}&limit=1000")
     buckets = {}
     now_s = int(time.time())
@@ -149,8 +167,15 @@ def update_1s():
             b["bv"] += quote_volume
         else:
             b["sv"] += quote_volume
-    bars = [buckets[k] for k in sorted(buckets)]
-    write_json(DATA / "bars_1s.json", bars)
+    existing_path = DATA / "bars_1s.json"
+    existing = []
+    if existing_path.exists():
+        try:
+            existing = json.loads(existing_path.read_text())
+        except Exception:
+            existing = []
+    bars = merge_bars(existing, [buckets[k] for k in sorted(buckets)], keep_seconds=86400)
+    write_json(existing_path, bars)
     return len(bars)
 
 

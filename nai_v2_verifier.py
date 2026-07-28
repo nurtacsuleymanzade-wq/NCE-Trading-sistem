@@ -86,11 +86,28 @@ def digest_closed(rows):
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
-def calc_nai(rows):
+def calc_nai(rows, timeframe=None):
+    """Calculate NAI lines and simple order-flow events.
+
+    Keeps the original quote-volume math and EMA5 visual lines. Event logic is
+    intentionally simple: raw aggression can trigger fast events while smoothed
+    BuyLine/SellLine is used for visual dominance/trend confirmation.
+    """
     rows = [normalize(x) for x in rows]
     volume_ema = atr14 = atr_baseline = buy_line = sell_line = None
     out = []
     candidates = []
+    initiative_episode = None
+    buy_was_strong = False
+    sell_was_strong = False
+    buy_peak = None
+    sell_peak = None
+    buy_peak_high = None
+    sell_peak_low = None
+    one_s_buy_window = []
+    one_s_sell_window = []
+    one_s_buy_episode = 0
+    one_s_sell_episode = 0
     for i, x in enumerate(rows):
         pc = out[i - 1]["c"] if i else (x["o"] or x["c"])
         tr = max(x["h"] - x["l"], abs(x["h"] - pc), abs(x["l"] - pc))
@@ -115,25 +132,97 @@ def calc_nai(rows):
         sell_line = ema(sell_line, sell_agg, 5)
         price_response = (x["c"] - x["o"]) / (atr14 + EPS)
         sell_response = (x["o"] - x["c"]) / (atr14 + EPS)
-        initiative_buy = buy_line >= 70 and buy_line > sell_line and nd >= 0.15 and price_response >= 0.25
-        initiative_sell = sell_line >= 70 and sell_line > buy_line and nd <= -0.15 and sell_response >= 0.25
-        buy_absorption = buy_line >= 70 and buy_line > sell_line and nd >= 0.25 and volume_power >= 1.5 and -0.10 <= price_response <= 0.10
-        sell_absorption = sell_line >= 70 and sell_line > buy_line and nd <= -0.25 and volume_power >= 1.5 and -0.10 <= sell_response <= 0.10
-        buy_failure = buy_line >= 70 and buy_line > sell_line and nd >= 0.25 and volume_power >= 1.5 and price_response <= -0.25
-        sell_failure = sell_line >= 70 and sell_line > buy_line and nd <= -0.25 and volume_power >= 1.5 and sell_response <= -0.25
-        exhaustion = bool(out and max(out[-1]["buyLine"], out[-1]["sellLine"]) >= 85 and max(buy_line, sell_line) < 55 and volume_power < 1.2)
+
+        buy_strong = buy_agg >= 70 or (buy_line > sell_line and nd >= 0.20 and volume_power >= 1.30)
+        sell_strong = sell_agg >= 70 or (sell_line > buy_line and nd <= -0.20 and volume_power >= 1.30)
+        buy_dominant = buy_line > sell_line and buy_agg > sell_agg
+        sell_dominant = sell_line > buy_line and sell_agg > buy_agg
+        buy_absorption = buy_strong and buy_dominant and price_response <= 0.10 and price_response >= -0.20
+        sell_absorption = sell_strong and sell_dominant and sell_response <= 0.10 and sell_response >= -0.20
+        buy_failure = buy_strong and buy_dominant and price_response <= -0.20
+        sell_failure = sell_strong and sell_dominant and price_response >= 0.20
+        initiative_buy = buy_strong and buy_dominant and price_response >= 0.25
+        initiative_sell = sell_strong and sell_dominant and sell_response >= 0.25
+
+        # Reset initiative episode after neutralization or dominance flip.
+        if initiative_episode == "BUY" and (sell_line >= buy_line or abs(buy_line - sell_line) < 5):
+            initiative_episode = None
+        if initiative_episode == "SELL" and (buy_line >= sell_line or abs(buy_line - sell_line) < 5):
+            initiative_episode = None
+
         raw_events = []
-        if initiative_buy: raw_events.append("INITIATIVE_BUY")
-        if initiative_sell: raw_events.append("INITIATIVE_SELL")
-        if buy_absorption: raw_events.append("BUY_ABSORPTION")
-        if sell_absorption: raw_events.append("SELL_ABSORPTION")
-        if buy_failure: raw_events.append("BUY_FAILURE")
-        if sell_failure: raw_events.append("SELL_FAILURE")
-        if exhaustion: raw_events.append("EXHAUSTION")
-        if initiative_buy and buy_absorption:
-            raw_events.remove("BUY_ABSORPTION")
-        if initiative_sell and sell_absorption:
-            raw_events.remove("SELL_ABSORPTION")
+        if initiative_buy and initiative_episode != "BUY":
+            raw_events.append("IB")
+            initiative_episode = "BUY"
+        elif initiative_sell and initiative_episode != "SELL":
+            raw_events.append("IS")
+            initiative_episode = "SELL"
+        if buy_failure:
+            raw_events.append("BF")
+        elif buy_absorption:
+            raw_events.append("BA")
+        if sell_failure:
+            raw_events.append("SF")
+        elif sell_absorption:
+            raw_events.append("SA")
+
+        # 1-second absorption duration: last-10-second rolling detector.
+        # If at least 5 seconds in the last 10 qualify, keep one running episode label.
+        if timeframe == "1s":
+            raw_events = [e for e in raw_events if e not in {"BA", "SA"}]
+            one_s_buy_window.append(bool(buy_absorption))
+            one_s_sell_window.append(bool(sell_absorption))
+            one_s_buy_window = one_s_buy_window[-10:]
+            one_s_sell_window = one_s_sell_window[-10:]
+            buy_window_active = sum(one_s_buy_window) >= 5
+            sell_window_active = sum(one_s_sell_window) >= 5
+            if buy_window_active:
+                one_s_buy_episode = max(one_s_buy_episode + 1, sum(one_s_buy_window))
+            else:
+                one_s_buy_episode = 0
+            if sell_window_active:
+                one_s_sell_episode = max(one_s_sell_episode + 1, sum(one_s_sell_window))
+            else:
+                one_s_sell_episode = 0
+            if one_s_buy_episode >= 5:
+                raw_events = [e for e in raw_events if e != "BA"] + [f"BA {one_s_buy_episode}s"]
+            if one_s_sell_episode >= 5:
+                raw_events = [e for e in raw_events if e != "SA"] + [f"SA {one_s_sell_episode}s"]
+
+        # Exhaustion: strong side reached first, then decays/crosses while price fails new extreme.
+        buy_exhaustion = False
+        sell_exhaustion = False
+        if buy_strong:
+            buy_was_strong = True
+            buy_peak = max(buy_peak or buy_agg, buy_agg, buy_line)
+            buy_peak_high = max(buy_peak_high or x["h"], x["h"])
+        elif buy_was_strong and buy_peak is not None:
+            drop = buy_peak - max(buy_agg, buy_line)
+            spread_close = (buy_line <= sell_line) or ((buy_line - sell_line) <= 8) or drop >= 30
+            no_new_high = buy_peak_high is not None and x["h"] <= buy_peak_high + EPS
+            buy_exhaustion = drop >= 18 and spread_close and no_new_high
+            if buy_exhaustion or sell_line > buy_line:
+                buy_was_strong = False
+                buy_peak = None
+                buy_peak_high = None
+        if sell_strong:
+            sell_was_strong = True
+            sell_peak = max(sell_peak or sell_agg, sell_agg, sell_line)
+            sell_peak_low = min(sell_peak_low if sell_peak_low is not None else x["l"], x["l"])
+        elif sell_was_strong and sell_peak is not None:
+            drop = sell_peak - max(sell_agg, sell_line)
+            spread_close = (sell_line <= buy_line) or ((sell_line - buy_line) <= 8) or drop >= 30
+            no_new_low = sell_peak_low is not None and x["l"] >= sell_peak_low - EPS
+            sell_exhaustion = drop >= 18 and spread_close and no_new_low
+            if sell_exhaustion or buy_line > sell_line:
+                sell_was_strong = False
+                sell_peak = None
+                sell_peak_low = None
+        if buy_exhaustion:
+            raw_events.append("BE")
+        if sell_exhaustion:
+            raw_events.append("SE")
+
         events = list(raw_events) if x["closed"] else []
         trapped = []
         if x["closed"]:
@@ -143,12 +232,12 @@ def calc_nai(rows):
                     continue
                 if dist > 3:
                     candidates.remove(cand); continue
-                if cand["side"] == "BUY" and (x["c"] < cand["low"] or x["c"] <= cand["close"] - 0.25 * cand["atr14"]):
-                    events.append("BX_CONFIRMED")
+                if cand["side"] == "BUY" and x["l"] < cand["low"]:
+                    events.append("BX")
                     trapped.append({"type":"TRAPPED_BUYERS","candidateTime":cand["time"],"confirmationTime":x["t"],"candidatePrice":cand["close"],"confirmationPrice":x["c"],"barsToConfirm":dist,"repaint":False})
                     candidates.remove(cand)
-                elif cand["side"] == "SELL" and (x["c"] > cand["high"] or x["c"] >= cand["close"] + 0.25 * cand["atr14"]):
-                    events.append("SX_CONFIRMED")
+                elif cand["side"] == "SELL" and x["h"] > cand["high"]:
+                    events.append("SX")
                     trapped.append({"type":"TRAPPED_SELLERS","candidateTime":cand["time"],"confirmationTime":x["t"],"candidatePrice":cand["close"],"confirmationPrice":x["c"],"barsToConfirm":dist,"repaint":False})
                     candidates.remove(cand)
             if buy_absorption or buy_failure:
@@ -158,10 +247,11 @@ def calc_nai(rows):
         out.append({**x, "v": V, "delta": delta, "nd": nd, "volumePower": volume_power, "atr14": atr14,
                     "atrRegime": atr_regime, "relativeForce": relative_force, "rawBuy": raw_buy, "rawSell": raw_sell,
                     "buyAgg": buy_agg, "sellAgg": sell_agg, "buyLine": buy_line, "sellLine": sell_line,
+                    "buyStrong": buy_strong, "sellStrong": sell_strong, "buyDominant": buy_dominant, "sellDominant": sell_dominant,
                     "priceResponse": price_response, "sellResponse": sell_response, "events": events,
                     "provisionalEvents": [] if x["closed"] else raw_events, "trapped": trapped})
-    return out
 
+    return out
 
 def synth_bar(t, bv, sv, o=100, tr=10, response=0.0, closed=True):
     c = o + response * tr
@@ -176,33 +266,38 @@ def force_event_bar(side, response, t=10, closed=True):
     return calc_nai(bars)[-1]
 
 
+def events_in(rows, timeframe=None):
+    return [e for r in calc_nai(rows, timeframe=timeframe) for e in r["events"]]
+
+
 def run_unit_tests():
-    assert "INITIATIVE_BUY" in force_event_bar("buy", 0.50)["events"]
-    assert "INITIATIVE_SELL" in force_event_bar("sell", 0.50)["events"]
-    assert "BUY_ABSORPTION" in force_event_bar("buy", 0.02)["events"]
-    assert "SELL_ABSORPTION" in force_event_bar("sell", 0.02)["events"]
+    assert "IB" in events_in([synth_bar(i, 1000, 1000, response=0.0) for i in range(10)] + [synth_bar(10+i, 10000, 100, response=0.50) for i in range(5)])
+    assert "IS" in events_in([synth_bar(i, 1000, 1000, response=0.0) for i in range(10)] + [synth_bar(10+i, 100, 10000, response=-0.50) for i in range(5)])
+    assert "BA" in force_event_bar("buy", 0.02)["events"]
+    assert "SA" in force_event_bar("sell", 0.02)["events"]
     buy_fail = force_event_bar("buy", -0.60)
-    assert "BUY_FAILURE" in buy_fail["events"] and "BUY_ABSORPTION" not in buy_fail["events"]
+    assert "BF" in buy_fail["events"] and "BA" not in buy_fail["events"]
     sell_fail = force_event_bar("sell", -0.60)
-    assert "SELL_FAILURE" in sell_fail["events"] and "SELL_ABSORPTION" not in sell_fail["events"]
-    provisional = force_event_bar("buy", 0.50, closed=False)
+    assert "SF" in sell_fail["events"] and "SA" not in sell_fail["events"]
+    provisional_rows = [synth_bar(i, 1000, 1000, response=0.0) for i in range(10)] + [synth_bar(10, 10000, 100, response=0.50, closed=False)]
+    provisional = calc_nai(provisional_rows)[-1]
     assert provisional["events"] == [] and provisional["provisionalEvents"], provisional
     bx_bars = [synth_bar(i, 1000, 1000) for i in range(10)] + [synth_bar(10+i, 10000, 100, response=-0.60) for i in range(5)]
     event = bx_bars[-1]
-    bx_bars.append({**synth_bar(20, 1000, 1000), "o": event["c"], "h": event["c"]+1, "l": event["c"]-8, "c": event["l"]-1})
-    assert "BX_CONFIRMED" in calc_nai(bx_bars)[-1]["events"]
+    bx_bars.append({**synth_bar(20, 1000, 1000), "o": event["c"], "h": event["c"]+1, "l": event["l"]-1, "c": event["l"]-0.5})
+    assert "BX" in calc_nai(bx_bars)[-1]["events"]
     sx_bars = [synth_bar(i, 1000, 1000) for i in range(10)] + [synth_bar(10+i, 100, 10000, response=0.60) for i in range(5)]
     event = sx_bars[-1]
     sx_bars.append({"t": 20, "o": event["h"] + 1, "h": event["h"] + 2, "l": event["h"], "c": event["h"] + 1,
                     "v": 2000, "bv": 1000, "sv": 1000, "volume_unit": "QUOTE_USDT", "closed": True})
-    assert "SX_CONFIRMED" in calc_nai(sx_bars)[-1]["events"]
+    assert "SX" in calc_nai(sx_bars)[-1]["events"]
 
 
 def verify_data():
-    result = {"timeframes": {}, "events": {}, "manual_15m": []}
+    result = {"timeframes": {}, "events": {}, "examples": {}, "manual_15m": []}
     for tf, fn in TF_FILES.items():
         rows = json.loads((DATA / fn).read_text())
-        calc = calc_nai(rows)
+        calc = calc_nai(rows, timeframe=tf)
         inv = {"rows": len(calc), "unit_quote_usdt": 0, "closed_rows": 0, "open_rows": 0, "v_sum_fail": 0, "range_fail": 0, "nan": 0, "inf": 0, "neg_volume": 0, "zero_atr": 0, "provisional_event_leak": 0}
         ev = {}
         for r in calc:
@@ -216,7 +311,16 @@ def verify_data():
             inv["zero_atr"] += int(abs(r["atr14"]) < EPS)
             inv["range_fail"] += int(not(0 <= r["buyAgg"] < 100 and 0 <= r["sellAgg"] < 100 and 0 <= r["buyLine"] < 100 and 0 <= r["sellLine"] < 100 and -1 <= r["nd"] <= 1))
             inv["provisional_event_leak"] += int((not r["closed"]) and bool(r["events"]))
-            for e in r["events"]: ev[e] = ev.get(e, 0) + 1
+            for e in r["events"]:
+                base_e = e.split()[0]
+                ev[base_e] = ev.get(base_e, 0) + 1
+                if base_e in {"BA", "SA", "BF", "SF", "BX", "SX", "BE", "SE"} and base_e not in result["examples"]:
+                    result["examples"][base_e] = {
+                        "tf": tf, "t": r["t"], "label": e, "o": round(r["o"], 2), "h": round(r["h"], 2), "l": round(r["l"], 2), "c": round(r["c"], 2),
+                        "nd": round(r["nd"], 4), "volumePower": round(r["volumePower"], 4), "atr14": round(r["atr14"], 4),
+                        "buyAgg": round(r["buyAgg"], 4), "sellAgg": round(r["sellAgg"], 4), "buyLine": round(r["buyLine"], 4), "sellLine": round(r["sellLine"], 4),
+                        "priceResponse": round(r["priceResponse"], 4), "sellResponse": round(r["sellResponse"], 4), "closed": r["closed"],
+                    }
         result["timeframes"][tf] = inv
         result["events"][tf] = ev
         if tf == "15m":
@@ -298,3 +402,5 @@ if __name__ == "__main__":
     repaint = real_non_repaint_tests()
     assert all(repaint[k] is True for k in ["OPEN_CANDLE_MUTATION_PASS", "CLOSED_SNAPSHOT_IMMUTABILITY_PASS", "PROCESS_RESTART_REPLAY_MATCH", "NO_FINAL_MARKER_ON_PROVISIONAL"]), repaint
     print(json.dumps({"ok": True, **data_result, "repaint": repaint}, indent=2, ensure_ascii=False))
+
+
