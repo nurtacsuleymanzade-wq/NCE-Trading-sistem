@@ -16,9 +16,10 @@ from urllib.request import urlopen
 import websockets
 
 REPO = Path(os.environ.get("NCE_REPO", "/root/NCE-Trading-sistem-inspect"))
-DATA = REPO / "data"
-ARCHIVE = DATA / "bars_1s.json"
-GAPS = DATA / "gaps_1s.json"
+STATE = Path(os.environ.get("NCE_1S_STATE_DIR", "/var/lib/nce-trading"))
+STATE.mkdir(parents=True, exist_ok=True)
+ARCHIVE = STATE / "bars_1s_archive.json"
+GAPS = STATE / "gaps_1s.json"
 LOCK = Path(os.environ.get("NCE_LOCK", "/run/nce-trading-updater.lock"))
 WS_URL = os.environ.get("NCE_AGG_WS", "wss://fstream.binance.com/market/ws/btcusdt@aggTrade")
 KEEP_SECONDS = int(os.environ.get("NCE_1S_KEEP_SECONDS", "86400"))
@@ -46,7 +47,7 @@ def compact(bars):
 
 
 def write_archive(bars):
-    DATA.mkdir(parents=True, exist_ok=True)
+    STATE.mkdir(parents=True, exist_ok=True)
     now_s = int(time.time())
     closed_keys = [k for k in sorted(bars) if k < now_s]
     for k in closed_keys:

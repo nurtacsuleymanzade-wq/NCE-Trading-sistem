@@ -167,11 +167,13 @@ def update_1s():
             b["bv"] += quote_volume
         else:
             b["sv"] += quote_volume
+    archive_path = Path(os.environ.get("NCE_1S_ARCHIVE", "/var/lib/nce-trading/bars_1s_archive.json"))
     existing_path = DATA / "bars_1s.json"
     existing = []
-    if existing_path.exists():
+    source_path = archive_path if archive_path.exists() else existing_path
+    if source_path.exists():
         try:
-            existing = json.loads(existing_path.read_text())
+            existing = json.loads(source_path.read_text())
         except Exception:
             existing = []
     bars = merge_bars(existing, [buckets[k] for k in sorted(buckets)], keep_seconds=86400)
