@@ -34,12 +34,35 @@ function fmtNum(x,d){var n=Number(x);return isFinite(n)?n.toLocaleString(undefin
 function card(title,html,cls){return '<div class="term-card"><b>'+esc(title)+'</b><div class="'+(cls||'')+'">'+html+'</div></div>';}
 function listObj(obj){if(!obj||typeof obj!=='object')return esc(obj);return '<ul>'+Object.keys(obj).map(function(k){return '<li><b>'+esc(k)+':</b> '+esc(typeof obj[k]==='number'?fmtNum(obj[k]):obj[k])+'</li>';}).join('')+'</ul>';}
 function rawDetails(j){return '<details><summary>Raw verified JSON</summary><pre>'+esc(JSON.stringify(j,null,2))+'</pre></details>';}
+
+function hovaChatView(j){
+  var ev=(j.evidence||[]).map(function(x){return '<li><b>'+esc(x.module)+':</b> '+esc(x.status||'')+'</li>';}).join('');
+  return '<div class="term-grid">'
+    +card('Trader Hova answer', '<b>'+esc(j.decision||'WAIT')+'</b><br>'+esc(j.answer||'Evidence-only backend reply'), statusClass(j.status))
+    +card('Mode / confidence', 'Mode: <b>'+esc(j.mode||'research_only')+'</b><br>Confidence: <b>'+esc(j.confidence||'LOW')+'</b><br>TF: <b>'+esc(j.timeframe||curTF)+'</b>')
+    +card('Ask Hova', '<textarea id="hovaMsg" style="width:100%;min-height:70px;background:#0b1220;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:8px" placeholder="Sual yaz: məsələn, indi hansı evidence var?"></textarea><br><button onclick="sendHovaChat()" style="margin-top:6px;background:#238636;color:white;border:1px solid #2ea043;border-radius:5px;padding:6px 10px;cursor:pointer">Send evidence request</button><div id="hovaOut" style="margin-top:8px"></div>')
+    +card('Evidence modules','<ul>'+ev+'</ul>')
+    +card('Missing/delayed data', esc((j.missing_or_delayed_data||[]).join(', ')||'None'), (j.missing_or_delayed_data||[]).length?'backend-warn':'backend-ok')
+    +card('Safety rules', listObj(j.rules||{}),'backend-warn')
+    +rawDetails(j)+'</div>';
+}
+function sendHovaChat(){
+  var q=(document.getElementById('hovaMsg')||{}).value||'';
+  var out=document.getElementById('hovaOut');
+  if(out)out.innerHTML='<pre>Sending to evidence backend...</pre>';
+  fetch(API_BASE+'/api/v1/hova/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:q,timeframe:curTF||'1m'})})
+    .then(function(r){if(!r.ok)throw Error('hova/chat HTTP '+r.status);return r.json();})
+    .then(function(j){if(out)out.innerHTML=hovaChatView(j);})
+    .catch(function(e){if(out)out.innerHTML='<pre class="backend-bad">'+esc(e.message||e)+'</pre>';});
+}
 function terminalView(name,j){
   var s=j&&j.status; var html='<div class="term-grid">'+pill('Status',s==='PASS'||s==='OK',s||'UNKNOWN');
   if(j&&j.time_utc) html+=pill('Updated UTC',true,j.time_utc);
   if(j&&j.symbol) html+=pill('Symbol',true,j.symbol);
   if(j&&j.timeframe) html+=pill('Timeframe',true,j.timeframe);
-  if(name==='Likidite ve Liquidation Haritası'){
+  if(name==='Trader Hova'){
+    return hovaChatView(j);
+  } else if(name==='Likidite ve Liquidation Haritası'){
     var l=j.liquidity||{}, m=j.microstructure||{}, d=j.derivatives||{};
     html+=card('Liquidity levels',listObj(l.levels||{}));
     html+=card('Equal highs/lows','Equal highs: <b>'+esc(l.equal_high_count||0)+'</b><br>Equal lows: <b>'+esc(l.equal_low_count||0)+'</b>');
@@ -57,6 +80,21 @@ function terminalView(name,j){
     html+=card('Decision mode',esc((j.decision||'WAIT')+' / '+(j.mode||'research_only')));
     html+=card('Real sources present',esc(Object.keys(mods).filter(function(k){return mods[k]&&mods[k].status;}).join(', ')));
     html+=card('Truth',esc('External macro/news source is not connected yet; no invented news is shown. This card uses live terminal/data-health context only.'),'backend-warn');
+  } else if(name==='Olasılık Haritası'){
+    var prob=j.probability||{}, met=j.metrics||{}, proof=j.no_lookahead_proof||{}, rules=j.rules||{};
+    if(j.status!=='PASS'){
+      html+=card('Calibration status',esc((j.status||'UNKNOWN')+' — insufficient/error payload is not displayed as probability.'),'backend-bad');
+      html+=card('Reason',listObj({sample_size:j.sample_size,minimum_required:j.minimum_required,reason:j.reason,data:j.data}),'backend-warn');
+    } else {
+      html+=card('Calibrated probability','Up: <b>'+fmtNum(prob.up,2)+'%</b><br>Range: <b>'+fmtNum(prob.range,2)+'%</b><br>Down: <b>'+fmtNum(prob.down,2)+'%</b><br>Prediction: <b>'+esc(j.prediction||'UNKNOWN')+'</b>');
+      html+=card('Walk-forward validation','Samples: <b>'+esc(j.sample_size||0)+'</b><br>Accuracy: <b>'+fmtNum(met.accuracy_pct,2)+'%</b><br>Brier: <b>'+fmtNum(met.brier_score,6)+'</b><br>Log loss: <b>'+fmtNum(met.log_loss,6)+'</b>');
+      html+=card('No-lookahead proof','Closed bars only: <b>'+esc(!!proof.closed_bars_only)+'</b><br>All validation rows pass: <b>'+esc(!!proof.all_validation_rows_pass)+'</b><br>Past-only band: <b>'+esc(!!proof.range_band_uses_only_past_closed_outcomes)+'</b><br>Future rows used: <b>'+esc(!!proof.future_rows_used_for_current_prediction)+'</b>', proof.all_validation_rows_pass&&proof.range_band_uses_only_past_closed_outcomes&&!proof.future_rows_used_for_current_prediction?'backend-ok':'backend-bad');
+    }
+    html+=card('Guard',esc('Long/Short Skoru is evidence score, NOT probability. This tab uses calibrated closed historical outcomes only and only displays probability on PASS payloads.'),'backend-warn');
+    html+=card('Rules',listObj(Object.assign({score_is_probability:false},rules)),'backend-warn');
+  } else if(name==='Long/Short Skoru'){
+    html+=card('Evidence score only',listObj(j.scores||j.score||j),'backend-warn');
+    html+=card('Probability guard',esc('These Long/Short values are NOT calibrated probabilities. Use Olasılık Haritası for walk-forward calibrated probability.'),'backend-warn');
   } else if(name==='Simülasyon'){
     html+=card('Current price','$'+fmtNum(j.current_price,2));
     html+=card('Scenarios',Object.keys(j.scenarios||{}).map(function(k){var x=j.scenarios[k];return '<b>'+esc(k)+':</b> '+fmtNum(x.net_return_pct,6)+'% net → $'+fmtNum(x.projected_price,2);}).join('<br>')||'No scenario');
