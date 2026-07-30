@@ -689,10 +689,10 @@
         init();
         resizeChartSafe();
         setWsLabel();
-        pollBackend();
+        try { pollBackend(); } catch(e) { console.warn('pollBackend not defined'); }
         loadTF(curTF);
         setInterval(function(){ if (curTF !== '1s') showStats(curTF, curData); }, 60000);
-        setInterval(pollBackend, 60000);
+        setInterval(function(){ try { pollBackend(); } catch(e) {} }, 60000);
 
         /* ====== UMPE Functions ====== */
         function loadUMPE() {
