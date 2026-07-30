@@ -81,6 +81,7 @@
                 <span id="fd"></span>
                 <span id="ls"></span>
             </div>
+            <div id="tf" style="display:flex;gap:3px;margin-left:10px;"></div>
             <button id="liveBtn" style="opacity: 0.55;">LIVE</button>
         </div>
         <div id="tabs"></div>
@@ -619,12 +620,12 @@
         function refreshPanels(){ resizeC(); if (curData.length) setSeries(curData, curTF); }
         function closePanel(p){ pan[p] = false; document.getElementById(p === 'vol' ? 'vl' : (p === 'del' ? 'dl' : 'nl')).style.display = 'none'; updBar(); refreshPanels(); }
         function updBar(){ var bar = document.getElementById('panel-bar'); bar.innerHTML = ''; ['vol', 'del', 'nai'].forEach(function(p){ if (!pan[p]) { var b = document.createElement('button'); b.textContent = '+ ' + p.toUpperCase(); b.onclick = function(){ pan[p] = true; document.getElementById(p === 'vol' ? 'vl' : (p === 'del' ? 'dl' : 'nl')).style.display = 'flex'; updBar(); refreshPanels(); }; bar.appendChild(b); } }); var sep = document.createElement('span'); sep.className = 'sep'; sep.textContent = 'Indicators ' + curTF + ':'; bar.appendChild(sep); ['vwap', 'poc', 'hvn', 'lvn', 'vah', 'val', 'bb', 'volumeProfile', 'marketProfile'].forEach(function(k){ var b = document.createElement('button'); b.textContent = (ind[k] ? '✓ ' : '+ ') + k.toUpperCase(); b.style.borderColor = ind[k] ? (IND_COLORS[k] || '#388bfd') : '#30363d'; b.style.color = ind[k] ? (IND_COLORS[k] || '#c9d1d9') : '#8b949e'; b.onclick = function(){ toggleInd(k); }; bar.appendChild(b); }); }
-        var tb = document.getElementById('tf'); TFs.forEach(function(t){ var b = document.createElement('button'); b.textContent = t; b.onclick = function(){ tb.querySelectorAll('button').forEach(function(x){ x.classList.remove('on'); }); b.classList.add('on'); loadTF(t); }; if (t === curTF) b.classList.add('on'); tb.appendChild(b); });
+        (function(){ var tb = document.getElementById('tf'); if (!tb) return; TFs.forEach(function(t){ var b = document.createElement('button'); b.textContent = t; b.onclick = function(){ tb.querySelectorAll('button').forEach(function(x){ x.classList.remove('on'); }); b.classList.add('on'); loadTF(t); }; if (t === curTF) b.classList.add('on'); tb.appendChild(b); }); })();
         syncInstantPrice(); setInterval(syncInstantPrice, 3000); setInterval(pollLatestKline, 5000);
         if (ENABLE_LIVE) {
           try {
             wsPrice = new WebSocket(WS_PRICE);
-            wsPrice.onmessage = function(e){ try { var d = JSON.JSON.parse(e.data); d = d && d.data ? d.data : d; var p = +d.p; updateHeaderPrice(p, headerPrice != null ? headerPrice : p); var t = Math.floor((+d.T || Date.now()) / 1000); if (!collectorArchiveState.last.price || Date.now() - collectorArchiveState.last.price > 15000) { collectorArchiveState.last.price = Date.now(); archiveCollector('binance_ws_trade_price', 'trade', [{t: t, price: p, qty: +d.q || 0}]); } } catch(e2) {} };
+            wsPrice.onmessage = function(e){ try { var d = JSON.parse(e.data); d = d && d.data ? d.data : d; var p = +d.p; updateHeaderPrice(p, headerPrice != null ? headerPrice : p); var t = Math.floor((+d.T || Date.now()) / 1000); if (!collectorArchiveState.last.price || Date.now() - collectorArchiveState.last.price > 15000) { collectorArchiveState.last.price = Date.now(); archiveCollector('binance_ws_trade_price', 'trade', [{t: t, price: p, qty: +d.q || 0}]); } } catch(e2) {} };
           } catch (e) {}
         }
         function safeChartSize(){ var hd = document.getElementById('hd'), info = document.getElementById('info'), bar = document.getElementById('panel-bar'), ct = document.getElementById('ct'), tabs = document.getElementById('tabs'), term = document.getElementById('terminal'), top = (hd ? hd.offsetHeight : 0) + (info ? info.offsetHeight : 0) + (tabs ? tabs.offsetHeight : 0) + (term && term.style.display !== 'none' ? term.offsetHeight : 0) + (bar ? bar.offsetHeight : 0), w = Math.max(320, window.innerWidth || document.documentElement.clientWidth || 320), h = Math.max(260, (window.innerHeight || document.documentElement.clientHeight || 520) - top); ct.style.height = h + 'px'; return { width: w, height: h }; }
