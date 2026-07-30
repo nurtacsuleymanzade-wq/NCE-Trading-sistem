@@ -168,6 +168,8 @@
         var VOLUME_UNIT = 'USDT'; // Placeholder, will be updated
         var API_KEYS_REDACTED = true; // Indicates API keys are redacted
         var collectorArchiveState = { last:{}, oneSecLastT:0 };
+        function archiveCollector(){}
+        function archiveCollectorTail(){}
         var pan = {vol:true,del:true,nai:true};
         var ind = {vwap:true,poc:true,hvn:false,lvn:false,vah:true,val:true,bb:false,volumeProfile:false,marketProfile:false};
         var IND_COLORS = {vwap:'#58a6ff',poc:'#f85149',hvn:'#f59e0b',lvn:'#a371f7',vah:'#3fb950',val:'#ef5350',bb:'#d29922',volumeProfile:'#8b949e',marketProfile:'#f2cc60'};
