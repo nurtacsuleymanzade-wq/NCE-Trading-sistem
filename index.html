@@ -19,7 +19,10 @@
         #tabs button { background: none; border: none; color: #8b949e; padding: 8px 15px; cursor: pointer; font-size: 0.9em; transition: color 0.2s, border-color 0.2s; }
         #tabs button.on { color: #ffffff; border-bottom: 2px solid #388bfd; }
         #tabs button:hover { color: #ffffff; }
-        #terminal { flex-grow: 1; background-color: #0d1117; padding: 15px; overflow: auto; /* Initially visible */ }
+        #terminal { max-height: 45vh; min-height: 100px; background-color: #0d1117; padding: 15px; overflow-y: auto; border-top: 1px solid #30363d; }
+        #tf button { background: none; border: 1px solid #30363d; color: #8b949e; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em; white-space: nowrap; }
+        #tf button:hover { background-color: #161b22; color: #fff; }
+        #tf button.on { background-color: #1f6feb; border-color: #388bfd; color: #fff; }
         #terminal pre { white-space: pre-wrap; word-wrap: break-word; margin: 0; font-family: 'Consolas', 'Monaco', 'Andale Mono', 'Ubuntu Mono', monospace; }
         #chart-container { flex-grow: 1; background-color: #0d1117; position: relative; }
         #ct { width: 100%; height: 100%; }
@@ -122,7 +125,7 @@
             <div id="tip" style="display: none;"></div>
         </div>
         <div id="panel-bar"></div>
-        <div id="terminal" style="display: block;"></div>
+        <div id="terminal" style="display: none;"></div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
     <script>
@@ -415,25 +418,55 @@
 
         function terminalView(name, j) {
           var html = '<div class="term-grid">';
+          // Status pill for every tab
+          var s = j && j.status;
+          if (s) html += pill('Status', s === 'PASS' || s === 'OK', s);
+          if (j && j.time_utc) html += pill('Updated UTC', true, j.time_utc.slice(11,19) + ' UTC');
+          if (j && j.symbol) html += pill('Symbol', true, j.symbol);
+          if (j && j.timeframe) html += pill('TF', true, j.timeframe);
+
           if (name === 'Trader Hova') {
             html += card('Current State', 'Mode: <b>' + esc(j.mode || 'research_only') + '</b><br>Confidence: <b>' + esc(j.confidence || 'LOW') + '</b><br>TF: <b>' + esc(j.timeframe || curTF) + '</b>');
             html += card('Ask Hova', '<textarea id="hovaMsg" style="width:100%;min-height:70px;background:#0b1220;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:8px" placeholder="Sual yaz: məsələn, indi hansı evidence var?"></textarea><br><button onclick="sendHovaChat()" style="margin-top:6px;background:#238636;color:white;border:1px solid #2ea043;border-radius:5px;padding:6px 10px;cursor:pointer">Send evidence request</button> <div id="hovaHistory"></div>');
             html += card('Evidence modules', '<ul>' + (j.evidence_modules || []).map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('') + '</ul>');
             html += card('Missing/delayed data', esc((j.missing_or_delayed_data || []).join(', ')||'None'), (j.missing_or_delayed_data || []).length ? 'backend-warn' : 'backend-ok');
-          } else if (name === 'Long/Short Skoru') {
-            var prob = j.probability || {};
-            var met = j.metrics || {};
-            var proof = j.proof || {};
-            if (Object.keys(prob).length > 0 || Object.keys(met).length > 0 || Object.keys(proof).length > 0) {
+          } else if (name === 'Real Trading / Paper') {
+            return realTradingPaperView(j);
+          } else if (name === 'Olasılık Haritası') {
+            var prob = j.probability || {}, met = j.metrics || {}, proof = j.no_lookahead_proof || {}, rules = j.rules || {};
+            if (j.status !== 'PASS') {
+              html += card('Calibration status', esc((j.status||'UNKNOWN') + ' — insufficient/error payload'), 'backend-bad');
+              html += card('Reason', listObj({sample_size: j.sample_size, minimum_required: j.minimum_required, reason: j.reason, data: j.data}), 'backend-warn');
+            } else {
               html += card('Calibrated probability', 'Up: <b>' + fmtNum(prob.up, 2) + '%</b><br>Range: <b>' + fmtNum(prob.range, 2) + '%</b><br>Down: <b>' + fmtNum(prob.down, 2) + '%</b><br>Prediction: <b>' + esc(j.prediction || 'UNKNOWN') + '</b>');
               html += card('Walk-forward validation', 'Samples: <b>' + esc(j.sample_size || 0) + '</b><br>Accuracy: <b>' + fmtNum(met.accuracy_pct, 2) + '%</b><br>Brier: <b>' + fmtNum(met.brier_score, 6) + '</b><br>Log loss: <b>' + fmtNum(met.log_loss, 6) + '</b>');
-              html += card('No-lookahead proof', 'Closed bars only: <b>' + esc(!!proof.closed_bars_only) + '</b><br>All validation rows pass: <b>' + esc(!!proof.all_validation_rows_pass) + '</b><br>Past-only band: <b>' + esc(!!proof.range_band_uses_only_past_closed_outcomes) + '</b><br>Future rows used: <b>' + esc(!!proof.future_rows_used_for_current_prediction) + '</b>', proof.all_validation_rows_pass && proof.range_band_uses_only_past_closed_outcomes && !proof.future_rows_used_for_current_prediction ? 'backend-ok' : 'backend-ba');
-            } else {
-              html += card('Long/Short Score', 'Score: <b>' + fmtNum(j.score, 2) + '</b> (Lower is better for short, higher for long)');
+              html += card('No-lookahead proof', 'Closed bars only: <b>' + esc(!!proof.closed_bars_only) + '</b><br>All validation rows pass: <b>' + esc(!!proof.all_validation_rows_pass) + '</b><br>Past-only band: <b>' + esc(!!proof.range_band_uses_only_past_closed_outcomes) + '</b><br>Future rows used: <b>' + esc(!!proof.future_rows_used_for_current_prediction) + '</b>', proof.all_validation_rows_pass && proof.range_band_uses_only_past_closed_outcomes && !proof.future_rows_used_for_current_prediction ? 'backend-ok' : 'backend-bad');
             }
+            html += card('Guard', 'Olasılık Haritası uses calibrated closed historical outcomes only.', 'backend-warn');
+          } else if (name === 'Long/Short Skoru') {
+            html += card('Evidence score', listObj(j.scores || j.score || j), 'backend-warn');
+            html += card('Guard', 'These values are NOT calibrated probabilities. Use Olasılık Haritası for that.', 'backend-warn');
+          } else if (name === 'Likidite ve Liquidation Haritası') {
+            var l = j.liquidity || {}, m = j.microstructure || {}, d = j.derivatives || {};
+            html += card('Liquidity levels', listObj(l.levels || {}));
+            html += card('Equal highs/lows', 'Equal highs: <b>' + esc(l.equal_high_count||0) + '</b><br>Equal lows: <b>' + esc(l.equal_low_count||0) + '</b>');
+            html += card('Recent FVG zones', (l.fair_value_gaps_recent||[]).slice(-6).map(function(x){ return esc(x.type)+' @ '+esc(x.time)+' ['+esc(x.low)+' → '+esc(x.high)+']'; }).join('<br>')||'No recent FVG zone detected');
+            html += card('Microstructure proxy', listObj(m.metrics||{}));
+            html += card('Derivatives/liquidation proxy', listObj(d.context||{}));
+            if (j.warning) html += card('Data warning', esc(j.warning), 'backend-warn');
+          } else if (name === 'Options') {
+            html += card('Available derivatives context', listObj(j.context||{}));
+            html += card('Missing true options feed', esc((j.missing_external_data||[]).join(', ')||'No missing fields reported'), 'backend-warn');
+          } else if (name === 'Makro ve Haber') {
+            var mods = j.modules||{};
+            html += card('Market synthesis', listObj(j.executive_summary||{}));
+            html += card('Decision mode', esc((j.decision||'WAIT')+' / '+(j.mode||'research_only')));
+            html += card('Real sources present', esc(Object.keys(mods).filter(function(k){ return mods[k]&&mods[k].status; }).join(', ') || 'None'));
           } else if (name === 'Simülasyon') {
-              html += card('Simulation Inputs', '<label>Initial Capital ($):</label><input type="number" id="simCapital" step="100" value="10000"><br><label>Leverage:</label><input type="number" id="simLeverage" step="0.1" value="5" min="1"><br><label>Trade Size (% of Capital):</label><input type="number" id="simTradeSize" step="1" value="5" min="0.1" max="100"><br><label>Stop Loss (%):</label><input type="number" id="simStopLoss" step="0.1" value="2" min="0.1"><br><label>Take Profit (%):</label><input type="number" id="simTakeProfit" step="0.1" value="5" min="0.1"><br><button onclick="runSimulation()" style="margin-top: 10px; background-color: #238636; color: white; border: 1px solid #2ea043; border-radius: 5px; padding: 6px 10px; cursor: pointer;">Run Simulation</button><div id="simulationResult" style="margin-top: 10px;"></div>', 'backend-warn');
-              html += card('Assumptions',listObj(j.assumptions||{}),'backend-warn');
+            html += card('Current price', '$'+fmtNum(j.current_price,2));
+            html += card('Scenarios', Object.keys(j.scenarios||{}).map(function(k){ var x=j.scenarios[k]; return '<b>'+esc(k)+':</b> '+fmtNum(x.net_return_pct,6)+'% net → $'+fmtNum(x.projected_price,2); }).join('<br>')||'No scenario');
+            html += card('Simulation Inputs', '<label>Initial Capital ($):</label><input type="number" id="simCapital" step="100" value="10000"><br><label>Leverage:</label><input type="number" id="simLeverage" step="0.1" value="5" min="1"><br><label>Trade Size (% of Capital):</label><input type="number" id="simTradeSize" step="1" value="5" min="0.1" max="100"><br><label>Stop Loss (%):</label><input type="number" id="simStopLoss" step="0.1" value="2" min="0.1"><br><label>Take Profit (%):</label><input type="number" id="simTakeProfit" step="0.1" value="5" min="0.1"><br><button onclick="runSimulation()" style="margin-top: 10px; background-color: #238636; color: white; border: 1px solid #2ea043; border-radius: 5px; padding: 6px 10px; cursor: pointer;">Run Simulation</button><div id="simulationResult" style="margin-top: 10px;"></div>', 'backend-warn');
+            html += card('Assumptions', listObj(j.assumptions||{}), 'backend-warn');
           } else if (name === 'Historical Replay / Backtest') {
             html += card('Replay summary', listObj(j.summary || {}));
             html += card('Recent trades', (j.recent_trades || []).slice(-8).map(function(t){ return esc(t.side)+' '+esc(t.time)+' entry $'+fmtNum(t.entry,2)+' exit $'+fmtNum(t.exit,2)+' net '+fmtNum(t.net_return_pct,6)+'%'; }).join('<br>') || 'No trades matched current threshold');
@@ -442,10 +475,55 @@
             var vp = j.volume_profile || {}; html += card('Volume profile', listObj((vp.profile && vp.profile.poc) || vp.profile || {} )); html += card('VWAP', listObj((j.vwap && j.vwap.vwap) || j.vwap || {})); html += card('Sessions', listObj((j.sessions && j.sessions.current_session) || j.sessions || {}));
           } else if (name === 'UMPE Skorları') {
             html = renderUMPEView(j);
+          } else if (name === 'Money Flow') {
+            html += card('Money Flow', listObj(j));
+            html += card('Data source', 'Local analysis from visible bars. Backend API endpoint not available.', 'backend-warn');
+          } else if (name === 'Smart Money') {
+            html += card('Smart Money Events', (j.events||[]).length ? listObj(j) : 'No smart money events detected.', 'backend-warn');
+          } else if (name === 'Order Flow') {
+            html += card('Order Flow State', listObj(j));
+          } else if (name === 'Data Health') {
+            html += card('Data Health', listObj(j));
           } else {
             html += kv(name, j);
           }
           html += '</div>'; return html;
+        }
+        function pill(label, ok, value) {
+          return '<div class="term-card" style="display:flex;align-items:center;gap:8px;padding:8px 12px"><b style="margin:0;color:#8b949e;font-size:0.8em">'+esc(label)+':</b><span style="color:'+(ok?'#3fb950':'#f85149')+'">'+esc(value)+'</span></div>';
+        }
+        function realTradingPaperView(j) {
+          var scope = j.scope || {}, paper = j.paper || {};
+          var html = '<div class="term-grid">';
+          html += card('Paper Balance', 'Balance: <b>$'+fmtNum(paper.balance_usdt,2)+'</b><br>In positions: <b>$'+fmtNum(paper.in_positions,2)+'</b><br>PnL: <span style="color:'+(paper.pnl_usdt>=0?'#3fb950':'#f85149')+'"><b>$'+fmtNum(paper.pnl_usdt,2)+'</b></span>');
+          html += card('Trading scope', listObj(scope));
+          html += card('Open positions', (paper.positions||[]).map(function(p){ return esc(p.side)+' $'+esc(p.entry)+' size '+esc(p.qty)+' PnL <span style="color:'+(p.pnl_usdt>=0?'#3fb950':'#f85149')+'">$'+fmtNum(p.pnl_usdt,2)+'</span>'; }).join('<br>')||'No open positions');
+          html += card('Actions', '<div id="paperActionOut"></div><button onclick="placePaperOrder(\'buy\')" style="background:#238636;color:white;border:1px solid #2ea043;border-radius:5px;padding:6px 10px;cursor:pointer;margin-right:6px">BUY $50 (PAPER)</button><button onclick="placePaperOrder(\'sell\')" style="background:#f85149;color:white;border:1px solid #da3633;border-radius:5px;padding:6px 10px;cursor:pointer;margin-right:6px">SELL $50 (PAPER)</button><button onclick="resetPaper()" style="background:#0d1117;color:#8b949e;border:1px solid #30363d;border-radius:5px;padding:6px 10px;cursor:pointer">Reset Account</button>');
+          html += '</div>';
+          return html;
+        }
+        function reloadRealTradingPaper() {
+          return Promise.all([apiGet('/api/v1/trading/scope'), apiGet('/api/v1/paper/state')]).then(function(a){
+            return {status: a[0].status, time_utc: a[0].time_utc, scope: a[0], paper: a[1]};
+          });
+        }
+        function placePaperOrder(side) {
+          var out = document.getElementById('paperActionOut');
+          if (out) out.innerHTML = '<pre>Sending PAPER '+esc(side)+'...</pre>';
+          fetch(API_BASE + '/api/v1/paper/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ side: side, symbol: 'BTCUSDT', notional_usdt: 50, reason: 'manual UI paper test' }) })
+            .then(function(r){ if (!r.ok) throw Error('paper/order HTTP '+r.status); return r.json(); })
+            .then(function(j){ if (out) out.innerHTML = '<pre>'+esc(JSON.stringify(j,null,2))+'</pre>'; return reloadRealTradingPaper(); })
+            .then(function(j){ document.getElementById('terminal').innerHTML = realTradingPaperView(j); })
+            .catch(function(e){ if (out) out.innerHTML = '<pre class="backend-bad">'+esc(e.message||e)+'</pre>'; });
+        }
+        function resetPaper() {
+          var out = document.getElementById('paperActionOut');
+          if (out) out.innerHTML = '<pre>Resetting paper account...</pre>';
+          fetch(API_BASE + '/api/v1/paper/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ balance_usdt: 500 }) })
+            .then(function(r){ if (!r.ok) throw Error('paper/reset HTTP '+r.status); return r.json(); })
+            .then(function(){ return reloadRealTradingPaper(); })
+            .then(function(j){ document.getElementById('terminal').innerHTML = realTradingPaperView(j); })
+            .catch(function(e){ if (out) out.innerHTML = '<pre class="backend-bad">'+esc(e.message||e)+'</pre>'; });
         }
         function setTab(name) {
           var term = document.getElementById('terminal');
