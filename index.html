@@ -129,6 +129,7 @@
                 .then(function(r){ if(r.ok) return r.json(); throw Error('status ' + r.status); });
             });
         }
+        function apiGet(url) { return fetch(url, { signal: AbortSignal.timeout(8000) }).then(function(r){ if(r.ok) return r.json(); throw Error('status ' + r.status); }); }
         var headerPrice = null, headerPrevPrice = null, headerPriceTs = 0;
         var oneSecondBars = {};
         var loadSeq = 0;
