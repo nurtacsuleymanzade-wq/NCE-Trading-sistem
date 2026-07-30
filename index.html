@@ -118,6 +118,17 @@
         var wsKline, ws1s, wsPrice, reconnectTimers = {}, reconnectDelay = {}, wsBaseIndex = {}, wsMsgSeen = {};
         var ENABLE_LIVE = true; // Set to false to disable live updates
         var serverSkewMs = 0;
+
+        function marketGet(localPath, fallbackUrl) {
+          // Try local API first, fallback to Binance/CORS
+          return fetch(localPath, { signal: AbortSignal.timeout(5000) })
+            .then(function(r){ if(r.ok) return r.json(); throw Error('status ' + r.status); })
+            .catch(function(){
+              if (!fallbackUrl) throw Error('no fallback');
+              return fetch(fallbackUrl, { signal: AbortSignal.timeout(8000) })
+                .then(function(r){ if(r.ok) return r.json(); throw Error('status ' + r.status); });
+            });
+        }
         var headerPrice = null, headerPrevPrice = null, headerPriceTs = 0;
         var oneSecondBars = {};
         var loadSeq = 0;
