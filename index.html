@@ -51,6 +51,38 @@
         .tip-warn { color: #f2cc60; }
         .tip-bad { color: #f85149; }
         .tip-ok { color: #3fb950; }
+
+        /* === UMPE Styles === */
+        .umpe-dash { display: flex; flex-direction: column; gap: 12px; }
+        .umpe-scores { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+        .umpe-card { background-color: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px; position: relative; overflow: hidden; }
+        .umpe-card .label { font-size: 0.75em; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .umpe-card .value { font-size: 1.6em; font-weight: bold; }
+        .umpe-card .bar { height: 4px; border-radius: 2px; margin-top: 8px; transition: width 0.5s ease; }
+        .umpe-card .evidence { font-size: 0.7em; color: #6e7681; margin-top: 4px; }
+        .umpe-bull { color: #3fb950; }
+        .umpe-bear { color: #f85149; }
+        .umpe-neutral { color: #d29922; }
+        .umpe-high { border-color: #f85149; }
+        .umpe-mid { border-color: #d29922; }
+        .umpe-low { border-color: #30363d; }
+        .umpe-layer-bar { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+        .umpe-layer-btn { background-color: #0d1117; border: 1px solid #30363d; color: #8b949e; padding: 6px 14px; border-radius: 16px; cursor: pointer; font-size: 0.8em; transition: all 0.2s; }
+        .umpe-layer-btn.on { background-color: #1f6feb; border-color: #388bfd; color: #fff; }
+        .umpe-layer-btn:hover { border-color: #58a6ff; }
+        .umpe-scenario { background-color: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 10px 14px; font-size: 0.85em; margin: 4px 0; }
+        .umpe-scenario b { color: #58a6ff; }
+        .umpe-vis { background-color: #0d1117; border: 1px solid #30363d; border-radius: 8px; min-height: 80px; padding: 10px; display: flex; align-items: center; justify-content: center; font-size: 0.8em; color: #6e7681; }
+        .umpe-evidence { font-size: 0.78em; margin-top: 6px; }
+        .umpe-evidence span { display: inline-block; margin-right: 8px; }
+        .umpe-ev-src { color: #58a6ff; }
+        .umpe-ev-val { color: #c9d1d9; }
+        .umpe-layer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .umpe-layer-box { background-color: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 10px; font-size: 0.78em; }
+        .umpe-layer-box b { color: #f2cc60; display: block; margin-bottom: 6px; }
+        .umpe-layer-box pre { margin: 0; font-size: 0.9em; color: #8b949e; white-space: pre-wrap; }
+        .umpe-refresh { background-color: #238636; border: 1px solid #2ea043; color: white; padding: 6px 14px; border-radius: 5px; cursor: pointer; font-size: 0.8em; }
+        .umpe-refresh:hover { background-color: #2ea043; }
         #hovaHistory { margin-top: 10px; }
         #hovaHistory ul { list-style: none; padding-left: 0; max-height: 150px; overflow-y: auto; border: 1px solid #30363d; border-radius: 5px; padding: 8px; background-color: #161b22;}
         #hovaHistory li { margin-bottom: 5px; font-size: 0.85em; }
@@ -108,7 +140,7 @@
         const EPS = 1e-9;
         const SYMBOL = 'BTCUSDT';
         const TFs = ['1s', '1m', '5m', '15m', '30m', '1h', '4h', '1D', '3D'];
-        const TERMINAL_TABS = ['Grafik','Trader Hova','Long/Short Skoru','Olasılık Haritası','Order Flow','Money Flow','Likidite ve Liquidation Haritası','Options','Volume/Market Profile','Smart Money','Makro ve Haber','Simülasyon','Historical Replay / Backtest','Data Health','Real Trading / Paper'];
+        const TERMINAL_TABS = ['Grafik','Trader Hova','Long/Short Skoru','Olasılık Haritası','Order Flow','Money Flow','Likidite ve Liquidation Haritası','Options','Volume/Market Profile','Smart Money','Makro ve Haber','Simülasyon','UMPE Skorları','Historical Replay / Backtest','Data Health','Real Trading / Paper'];
         var VOLUME_UNIT = 'QUOTE_ASSET'; // Default, may be updated by server
         var SYMBOL_CAP = 'BTC';
         // Globals
@@ -404,6 +436,8 @@
             html += card('Assumptions', listObj(j.assumptions || {}), 'backend-warn');
           } else if (name === 'Volume/Market Profile') {
             var vp = j.volume_profile || {}; html += card('Volume profile', listObj((vp.profile && vp.profile.poc) || vp.profile || {} )); html += card('VWAP', listObj((j.vwap && j.vwap.vwap) || j.vwap || {})); html += card('Sessions', listObj((j.sessions && j.sessions.current_session) || j.sessions || {}));
+          } else if (name === 'UMPE Skorları') {
+            html = renderUMPEView(j);
           } else {
             html += kv(name, j);
           }
@@ -433,6 +467,7 @@
             'Smart Money': function() { return loadSmartMoneyLocal(tf); },
             'Makro ve Haber': function() { return loadMacroNewsLocal(tf); },
             'Simülasyon': function() { return apiGet('/api/v1/simulation/state?tf=' + encodeURIComponent(tf)); },
+            'UMPE Skorları': function() { return loadUMPE(); },
             'Historical Replay / Backtest': function() { return apiGet('/api/v1/backtest/state?tf=' + encodeURIComponent(tf)); },
             'Data Health': function() { return apiGet('/api/v1/data-health'); },
             'Real Trading / Paper': function() { return reloadRealTradingPaper(); }
@@ -654,6 +689,185 @@
         loadTF(curTF);
         setInterval(function(){ if (curTF !== '1s') showStats(curTF, curData); }, 60000);
         setInterval(pollBackend, 60000);
+
+        /* ====== UMPE Functions ====== */
+        function loadUMPE() {
+            var tf = curTF || '1m';
+            // Trigger update first, then fetch all layers
+            var p1 = fetch(API_BASE + '/api/v1/umpe/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: SYMBOL, timeframe: tf }) })
+                .then(function(r){ if (!r.ok) throw Error('umpe/update HTTP ' + r.status); return r.json(); }).catch(function(e){ console.warn('umpe/update', e.message); return null; });
+            var p2 = apiGet('/api/v1/umpe/scores?tf=' + encodeURIComponent(tf));
+            var p3 = apiGet('/api/v1/umpe/layer1?tf=' + encodeURIComponent(tf));
+            var p4 = apiGet('/api/v1/umpe/layer2?tf=' + encodeURIComponent(tf));
+            return Promise.all([p1, p2, p3, p4]).then(function(results) {
+                return {
+                    status: 'PASS',
+                    time_utc: new Date().toISOString().slice(0, 19),
+                    symbol: SYMBOL,
+                    timeframe: tf,
+                    update_result: results[0],
+                    scores: results[1] || {},
+                    layer1: results[2] || {},
+                    layer2: results[3] || {}
+                };
+            }).catch(function(e) {
+                return {
+                    status: 'ERROR',
+                    time_utc: new Date().toISOString().slice(0, 19),
+                    error: e.message || String(e),
+                    scores: {},
+                    layer1: {},
+                    layer2: {}
+                };
+            });
+        }
+
+        function renderUMPEView(j) {
+            if (j.status === 'ERROR') {
+                return '<div class="backend-bad">Error loading UMPE: ' + esc(j.error) + '</div>';
+            }
+            var scores = j.scores || {};
+            var l1 = j.layer1 || {};
+            var l2 = j.layer2 || {};
+            var sc = scores.scores || {};
+            var scenario = scores.scenario || 'neutral';
+            var scenarioLabel = scores.scenario_label || 'N/A';
+            var evidence = scores.evidence_map || {};
+
+            // Score definitions with color mapping
+            var scoreDefs = [
+                { key: 'bull', label: 'Bull', color: '#3fb950' },
+                { key: 'bear', label: 'Bear', color: '#f85149' },
+                { key: 'breakout', label: 'Breakout', color: '#d29922' },
+                { key: 'reversal', label: 'Reversal', color: '#bc8cff' },
+                { key: 'cascade', label: 'Cascade Risk', color: '#f78166' },
+                { key: 'trap', label: 'Trap', color: '#ff7b72' },
+                { key: 'defense', label: 'Defense', color: '#58a6ff' },
+                { key: 'conflict', label: 'Conflict', color: '#e3b341' },
+                { key: 'magnet', label: 'Magnet', color: '#79c0ff' },
+                { key: 'cluster', label: 'Cluster', color: '#7ee787' }
+            ];
+
+            // Build score cards
+            var scoreCards = '';
+            scoreDefs.forEach(function(sd) {
+                var val = sc[sd.key];
+                if (val == null) val = 0;
+                val = Math.max(0, Math.min(100, Number(val)));
+                var barColor = sd.color;
+                var cls = val >= 70 ? 'umpe-high' : (val >= 40 ? 'umpe-mid' : 'umpe-low');
+                var ev = (evidence[sd.key] || []).length;
+                scoreCards += '<div class="umpe-card ' + cls + '">';
+                scoreCards += '<div class="label">' + esc(sd.label) + '</div>';
+                scoreCards += '<div class="value" style="color:' + barColor + '">' + val.toFixed(1) + '</div>';
+                scoreCards += '<div class="bar" style="width:' + val + '%;background:' + barColor + '"></div>';
+                scoreCards += '<div class="evidence">' + ev + ' evidence sources</div>';
+                scoreCards += '</div>';
+            });
+
+            // Scenario banner
+            var scenarioBanner = '<div class="umpe-scenario">';
+            scenarioBanner += 'Scenario: <b>' + esc(scenario.toUpperCase()) + '</b> — ' + esc(scenarioLabel);
+            scenarioBanner += ' | Updated: ' + esc((scores.time_utc || j.time_utc || '').slice(11, 19)) + ' UTC';
+            scenarioBanner += '</div>';
+
+            // Layer toggle bar
+            var layerToggles = '<div class="umpe-layer-bar">';
+            layerToggles += '<button class="umpe-layer-btn on" onclick="toggleUMPELayer(this,\'l1\')">📊 Order Book Heatmap</button>';
+            layerToggles += '<button class="umpe-layer-btn on" onclick="toggleUMPELayer(this,\'l2\')">🔥 Liquidation Heatmap</button>';
+            layerToggles += '<button class="umpe-layer-btn on" onclick="toggleUMPELayer(this,\'ev\')">📋 Evidence Details</button>';
+            layerToggles += '<button class="umpe-refresh" onclick="setTab(\'UMPE Skorları\')">🔄 Refresh</button>';
+            layerToggles += '</div>';
+
+            // Layer 1 visualization
+            var l1html = '<b>Order Book Heatmap</b>';
+            var mid = l1.mid_price || l1.mid || 'N/A';
+            var spread = l1.spread_bps != null ? l1.spread_bps : (l1.spread != null ? l1.spread : 'N/A');
+            var imbalance = l1.imbalance != null ? l1.imbalance.toFixed(3) : 'N/A';
+            var pressure = l1.pressure != null ? l1.pressure.toFixed(3) : 'N/A';
+            var bidWalls = l1.bid_walls_count || l1.walls_bid || 0;
+            var askWalls = l1.ask_walls_count || l1.walls_ask || 0;
+            var spoofSignals = (l1.spoof_signals || []).length;
+            var grid = l1.grid || [];
+            l1html += '<pre>Mid: $' + esc(mid) + ' | Spread: ' + esc(spread) + 'bps\nImbalance: ' + esc(imbalance) + ' | Pressure: ' + esc(pressure) + '\nWalls: Bid=' + esc(bidWalls) + ' Ask=' + esc(askWalls) + ' | Spoof: ' + esc(spoofSignals) + '</pre>';
+
+            // Simple grid visual (price ladder bars)
+            if (grid && grid.length) {
+                l1html += '<div style="font-size:0.7em;max-height:100px;overflow-y:auto">';
+                grid.forEach(function(g) {
+                    var w = Math.min(100, Math.abs(g.bid_notional || g.bid_qty || 0) / 100000 * 100);
+                    w = Math.max(w, Math.abs(g.ask_notional || g.ask_qty || 0) / 100000 * 100);
+                    w = Math.min(100, Math.max(1, w || 1));
+                    l1html += '<div style="display:flex;align-items:center;margin:1px 0">';
+                    l1html += '<span style="width:60px;color:#f85149;text-align:right;margin-right:4px">$' + esc(g.price_level || g.price || '?') + '</span>';
+                    l1html += '<div style="flex:1;display:flex;height:8px">';
+                    var bidW = g.bid_notional || g.bid_qty || 0;
+                    var askW = g.ask_notional || g.ask_qty || 0;
+                    var maxW = Math.max(1, bidW + askW || 1);
+                    l1html += '<div style="width:' + (bidW/maxW*50) + '%;background:#3fb950;height:8px;border-radius:2px 0 0 2px"></div>';
+                    l1html += '<div style="width:' + (askW/maxW*50) + '%;background:#f85149;height:8px;border-radius:0 2px 2px 0"></div>';
+                    l1html += '</div></div>';
+                });
+                l1html += '</div>';
+            }
+
+            // Layer 2 visualization
+            var l2html = '<b>Liquidation Clusters</b>';
+            var clusters = l2.clusters || [];
+            var longClusters = (clusters || []).filter(function(c){ return (c.side||'').toLowerCase() === 'long'; }).length;
+            var shortClusters = (clusters || []).filter(function(c){ return (c.side||'').toLowerCase() === 'short'; }).length;
+            var cascadeProb = l2.cascade_probability || l2.cascade_prob || 0;
+            var magnetScore = l2.magnet_score || 0;
+            l2html += '<pre>Clusters: Long=' + esc(longClusters) + ' Short=' + esc(shortClusters) + ' | Cascade: ' + (cascadeProb*100).toFixed(1) + '% | Magnet: ' + magnetScore.toFixed(2) + '</pre>';
+            if (clusters && clusters.length) {
+                var clHtml = '<table class="term-table" style="font-size:0.75em"><tr><th>Side</th><th>Price</th><th>Size</th><th>Dist%</th></tr>';
+                clusters.slice(0, 10).forEach(function(c) {
+                    clHtml += '<tr><td style="color:' + ((c.side||'').toLowerCase()==='long'?'#3fb950':'#f85149') + '">' + esc(c.side || '?') + '</td>';
+                    clHtml += '<td>$' + esc(c.price || c.price_level || '?') + '</td>';
+                    clHtml += '<td>' + esc(c.size || c.notional || c.qty || '?') + '</td>';
+                    clHtml += '<td>' + esc(c.distance_pct != null ? c.distance_pct.toFixed(2) + '%' : '?') + '</td></tr>';
+                });
+                clHtml += '</table>';
+                l2html += clHtml;
+            }
+
+            // Evidence details
+            var evHtml = '<b>Evidence Map</b>';
+            var hasEv = false;
+            Object.keys(evidence).forEach(function(scoreKey) {
+                var srcs = evidence[scoreKey] || [];
+                if (srcs.length) {
+                    hasEv = true;
+                    evHtml += '<div class="umpe-scenario" style="margin:4px 0">';
+                    evHtml += '<b>' + esc(scoreKey.toUpperCase()) + '</b> (' + srcs.length + ' sources)';
+                    evHtml += '<div class="umpe-evidence">';
+                    srcs.forEach(function(src) {
+                        var parts = (src || '').split('|');
+                        evHtml += '<span><span class="umpe-ev-src">' + esc(parts[0] || '?') + '</span> → <span class="umpe-ev-val">' + esc(parts[1] || '') + '</span></span>';
+                    });
+                    evHtml += '</div></div>';
+                }
+            });
+            if (!hasEv) evHtml += '<div class="umpe-vis">No evidence sources connected yet.</div>';
+
+            // Combine everything
+            var html = '<div class="umpe-dash">';
+            html += scenarioBanner;
+            html += '<div class="umpe-scores">' + scoreCards + '</div>';
+            html += layerToggles;
+            html += '<div id="umpeL1" class="umpe-layer-box">' + l1html + '</div>';
+            html += '<div id="umpeL2" class="umpe-layer-box">' + l2html + '</div>';
+            html += '<div id="umpeEv" class="umpe-layer-box">' + evHtml + '</div>';
+            html += '</div>';
+            return html;
+        }
+
+        function toggleUMPELayer(btn, target) {
+            btn.classList.toggle('on');
+            var visible = btn.classList.contains('on');
+            var el = document.getElementById('umpe' + target.toUpperCase());
+            if (el) el.style.display = visible ? 'block' : 'none';
+        }
     </script>
 </body>
 </html>
