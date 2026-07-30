@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NCE Trading System</title>
-    <link rel="stylesheet" href="style.css">
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0d1117; color: #c9d1d9; margin: 0; padding: 0; }
         #container { display: flex; flex-direction: column; height: 100vh; }
@@ -131,7 +130,7 @@
         const API_BASE = (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost')
             ? 'http://127.0.0.1:8791'
             : 'https://nce-api.204.168.191.154.sslip.io'; // Public API
-        const BIN = 'https://cors-anywhere.herokuapp.com/'; // CORS proxy for Binance
+        const BIN = ''; // CORS not needed; Binance API allows direct access
         const BIN_PATH = 'https://api.binance.com'; // Binance API base path
         const WS_KLINE_BASE = 'wss://fstream.binance.com/stream?streams=';
         const WS_KLINE_FALLBACK_BASE = 'wss://fstream.binance.com/stream?streams=';
