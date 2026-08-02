@@ -520,7 +520,8 @@
             html = renderUMPEView(j);
           } else if (name === 'Money Flow') {
             html += card('Money Flow', listObj(j));
-            html += card('Data source', 'Local analysis from visible bars. Backend API endpoint not available.', 'backend-warn');
+            html += card('Data source', esc(j.source || 'Binance candle volume / frontend calculation'), 'backend-warn');
+            if (j.warning) html += card('Data warning', esc(j.warning), 'backend-warn');
           } else if (name === 'Smart Money') {
             html += card('Smart Money Events', (j.events||[]).length ? listObj(j) : 'No smart money events detected.', 'backend-warn');
           } else if (name === 'Order Flow') {
@@ -1004,7 +1005,15 @@
             if (!hasEv) evHtml += '<div class="umpe-vis">No evidence sources connected yet.</div>';
 
             // Combine everything
-            var html = responseStatus(j) + '<div class="umpe-dash">';
+            var meta = '<div class="term-grid">';
+            if (j.status) meta += pill('Status', j.status === 'PASS' || j.status === 'OK', j.status);
+            if (j.time_utc) meta += pill('Updated UTC', true, j.time_utc.slice(11,19) + ' UTC');
+            if (j.symbol) meta += pill('Symbol', true, j.symbol);
+            if (j.timeframe) meta += pill('TF', true, j.timeframe);
+            if (j.source) meta += pill('Source', true, j.source);
+            if (j.warning) meta += card('Data warning', esc(j.warning), 'backend-warn');
+            meta += '</div>';
+            var html = responseStatus(j) + meta + '<div class="umpe-dash">';
             html += scenarioBanner;
             html += '<div class="umpe-scores">' + scoreCards + '</div>';
             html += layerToggles;
