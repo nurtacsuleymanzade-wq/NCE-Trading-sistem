@@ -233,7 +233,7 @@
               return body;
             });
           }).catch(function(err) {
-            console.error('NCE API request failed', {url: full, httpStatus: err.httpStatus || null, responseBody: err.responseBody || null, timeframe: tf, symbol: symbol, requestSequence: requestSeq, error: err.message || String(err)});
+            if (err && err.name !== 'AbortError' && !(requestSeq && requestSeq !== activePanelRequestSeq)) console.error('NCE API request failed', {url: full, httpStatus: err.httpStatus || null, responseBody: err.responseBody || null, timeframe: tf, symbol: symbol, requestSequence: requestSeq, error: err.message || String(err)});
             throw err;
           });
         }
@@ -468,6 +468,7 @@
           if (j && j.time_utc) html += pill('Updated UTC', true, j.time_utc.slice(11,19) + ' UTC');
           if (j && j.symbol) html += pill('Symbol', true, j.symbol);
           if (j && j.timeframe) html += pill('TF', true, j.timeframe);
+          else html += pill('TF', true, curTF || '1m');
 
           if (name === 'Trader Hova') {
             html += card('Current State', 'Mode: <b>' + esc(j.mode || 'research_only') + '</b><br>Confidence: <b>' + esc(j.confidence || 'LOW') + '</b><br>TF: <b>' + esc(j.timeframe || curTF) + '</b>');
@@ -582,8 +583,7 @@
           activePanelName = name;
           try {
             var panelUrl = new URL(window.location.href);
-            if (name === 'Grafik') panelUrl.searchParams.delete('panel');
-            else panelUrl.searchParams.set('panel', name);
+            panelUrl.searchParams.set('panel', name);
             if (fromHistory) window.history.replaceState({panel: name}, '', panelUrl.toString());
             else {
               var currentPanel = panelFromUrl();
@@ -885,7 +885,7 @@
                 warnMeta += pill('Status', false, j.status || 'WARN');
                 if (j.time_utc) warnMeta += pill('Updated UTC', true, j.time_utc.slice(11,19) + ' UTC');
                 if (j.symbol) warnMeta += pill('Symbol', true, j.symbol);
-                if (j.timeframe) warnMeta += pill('TF', true, j.timeframe);
+                warnMeta += pill('TF', true, j.timeframe || curTF || '1m');
                 warnMeta += pill('Source', false, j.source || 'UMPE backend');
                 warnMeta += '</div>';
                 return responseStatus(j) + warnMeta + '<div class="term-grid"><div class="term-card backend-warn">' + esc(j.warning || j.error || 'UMPE data is not available for this environment.') + '<br><br>No numeric UMPE scores are shown because a verified backend source is unavailable.</div></div>';
@@ -1019,7 +1019,7 @@
             if (j.status) meta += pill('Status', j.status === 'PASS' || j.status === 'OK', j.status);
             if (j.time_utc) meta += pill('Updated UTC', true, j.time_utc.slice(11,19) + ' UTC');
             if (j.symbol) meta += pill('Symbol', true, j.symbol);
-            if (j.timeframe) meta += pill('TF', true, j.timeframe);
+            meta += pill('TF', true, j.timeframe || curTF || '1m');
             if (j.source) meta += pill('Source', true, j.source);
             if (j.warning) meta += card('Data warning', esc(j.warning), 'backend-warn');
             meta += '</div>';
