@@ -315,56 +315,7 @@
                 },
             };
 
-            fetch(API_BASE + '/api/v1/simulation/run', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(body),
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.error) {
-                    resultDiv.innerHTML = `<span class="backend-bad">Error: ${data.error}</span>`;
-                } else if (data.status === 'completed') {
-                    const s = data.summary || {};
-                    const trades = data.trades || [];
-                    let resultsHTML = `
-                        <b>Simulation Results (${data.status})</b><br>
-                        Final Balance: <b>$${fmtNum(s.finalBalance, 2)}</b><br>
-                        Net Return: <b>${fmtNum(s.profitPct, 2)}%</b><br>
-                        Win Rate: ${fmtNum(s.winRate, 1)}% | Profit Factor: ${fmtNum(s.profitFactor, 2)}<br>
-                        Max Drawdown: ${fmtNum(s.maxDrawdownPct, 2)}% | Sharpe: ${fmtNum(s.sharpe, 2)}<br>
-                        Total Trades: ${s.totalTrades || 0}<br>
-                        Initial Capital: $${fmtNum(s.initialCapital, 2)}<br>
-                        `;
-                    if (trades.length > 0) {
-                        resultsHTML += `<b>Recent Trades (last 10):</b><br><ul>`;
-                        trades.slice(-10).forEach(function(t) {
-                            resultsHTML += `<li>${esc(t.side)} $${fmtNum(t.entryPrice, 2)} → $${fmtNum(t.exitPrice, 2)} PnL: $${fmtNum(t.pnl, 2)}</li>`;
-                        });
-                        resultsHTML += `</ul>`;
-                    }
-                    resultDiv.innerHTML = resultsHTML;
-                } else if (data.status === 'pending') {
-                    resultDiv.innerHTML = `<span class="backend-warn">Simulation ID: ${data.simulation_id} — stored as pending (future monitoring).</span>`;
-                } else if (data.status === 'INSUFFICIENT DATA') {
-                    resultDiv.innerHTML = `<span class="backend-warn">Insufficient data: ${data.error || data.warning || 'not enough bars for simulation'}</span>`;
-                } else if (data.status === 'ERROR') {
-                    resultDiv.innerHTML = `<span class="backend-bad">Error: ${data.error || data.warning || 'unknown error'}</span>`;
-                } else {
-                    resultDiv.innerHTML = `<pre>${esc(JSON.stringify(data, null, 2))}</pre>`;
-                }
-            })
-            .catch(error => {
-                console.error('Simulation run error:', error);
-                resultDiv.innerHTML = `<span class="backend-bad">An error occurred: ${error.message}</span>`;
-            });
+            resultDiv.innerHTML = '<span class="backend-warn">Simulation execution is unavailable: no backend simulation-run endpoint is deployed. No simulated numeric result was generated.</span>';
         }
         
 
@@ -380,7 +331,7 @@
         function loadLiquidityArchive(){try{return JSON.parse(localStorage.getItem(liqArchiveKey())||'[]');}catch(e){return [];}}
         function saveLiquidityArchiveEvent(ev){var arr=loadLiquidityArchive();arr.push(ev);if(arr.length>120)arr=arr.slice(-120);localStorage.setItem(liqArchiveKey(),JSON.stringify(arr));archiveCollector('website_liquidity_sweep_expectation',ev.timeframe||curTF,[ev]);return arr;}
         function analyzeOrderbookDepth(depth,tf){var bids=(depth.bids||[]).map(function(x){return {price:+x[0],qty:+x[1],notional:+x[0]*+x[1],side:'bid'};}).filter(function(x){return isFinite(x.notional)&&x.notional>0;});var asks=(depth.asks||[]).map(function(x){return {price:+x[0],qty:+x[1],notional:+x[0]*+x[1],side:'ask'};}).filter(function(x){return isFinite(x.notional)&&x.notional>0;});var bestBid=bids.length?bids[0].price:null,bestAsk=asks.length?asks[0].price:null,mid=(bestBid&&bestAsk)?(bestBid+bestAsk)/2:null;var spread=(bestBid&&bestAsk)?bestAsk-bestBid:null;return {status:'PASS',time_utc:new Date().toISOString().slice(0,19),symbol:SYMBOL,timeframe:tf,orderbook:{best_bid:bestBid,best_ask:bestAsk,mid:mid,spread:spread,bids:bids.slice(0,10),asks:asks.slice(0,10)},zones:{next_sweep:{price:null,side:null,timeframe:tf}},archive:loadLiquidityArchive()};}
-        function loadOrderbookLiquidity(tf){return marketGet('/api/v1/market/depth?symbol=BTCUSDT&limit=500',BIN+BIN_PATH+'/depth?symbol=BTCUSDT&limit=500').then(function(j){return analyzeOrderbookDepth(j,tf);});}
+        function loadOrderbookLiquidity(){return Promise.reject(new Error('Orderbook depth endpoint is not deployed; no proxy numeric liquidity is generated.'));}
         function liquidityMapView(j){var ob=j.orderbook||{},z=j.zones||{},arch=j.archive||[];function row(x,cls){return '<tr><td>'+esc(x.side==='ask'?'🔴 above':'🟢 below')+'</td><td>$'+fmtNum(x.price,2)+'</td><td>'+fmtNum(x.qty,4)+'</td><td>$'+fmtNum(x.notional,0)+'</td><td>'+fmtNum(x.distance_pct,3)+'%</td></tr>';}
         var next=z.next_sweep||{};return '<div class="term-grid">'+pill('Status',j.status==='PASS',j.status)+pill('Updated UTC',true,j.time_utc||'')+card('Current orderbook','Bid: <b>$'+fmtNum(ob.best_bid,2)+'</b><br>Ask: <b>$'+fmtNum(ob.best_ask,2)+'</b><br>Mid: <b>$'+fmtNum(ob.mid,2)+'</b><br>Spread: <b>$'+fmtNum(ob.spread,2)+'</b>')+card('💢 Next expected liquidity clean','<b>'+esc(next.side==='ask'?'UP / red ask wall':'DOWN / green bid wall')+'</b><br>Price: <b>$'+fmtNum(next.price,2)+'</b><br>Date: '+(next.time?new Date(next.time).toLocaleString():'N/A')+'')+'</div>'+card('Liquidity Archive (Last 5)','<table class="term-table"><tr><th>Side</th><th>Price</th><th>Qty</th><th>Notional</th><th>Dist %</th></tr>'+arch.slice(-5).map(function(x){return row(x);}).join('')+'</table>');}
         function renderLiquidityMapTab(j){window.__nceLiquidity=j;var term=document.getElementById('terminal');if(term)term.innerHTML=liquidityMapView(j);return j;}
@@ -449,7 +400,7 @@
         }
 
         function hovaHistoryList(events){return (events||[]).slice(-8).reverse().map(function(e){return '<li><b>'+esc(e.source||'?')+'</b> '+esc((e.time_utc||'').slice(11,19))+' — '+esc(e.message||'')+(e.stored_memory?' <span class=\"backend-ok\">[memory]</span>':'')+'</li>';}).join('')||'<li>No archived messages yet.</li>';}
-        function loadHovaHistory(){var out=document.getElementById('hovaHistory');if(out)out.innerHTML='<pre>Loading history...</pre>';return apiGet('/api/v1/hova/history?limit=30').then(function(j){if(out)out.innerHTML='<ul>'+hovaHistoryList(j.events||[])+'</ul>';return j;}).catch(function(e){if(out)out.innerHTML='<pre class=\"backend-bad\">'+esc(e.message||e)+'</pre>';});}
+        function loadHovaHistory(){var out=document.getElementById('hovaHistory');if(out)out.innerHTML='<pre class="backend-warn">No history endpoint is deployed; archived messages are not available.</pre>';return Promise.resolve({status:'NO_DATA',events:[],warning:'No history endpoint is deployed.'});}
         function hovaChatView(j){
             var ev = (j.evidence_modules||[]).map(function(x){return '<li>'+esc(x)+'</li>';}).join('');
             var html = '<div class="term-grid">';
