@@ -662,15 +662,6 @@
           resizeChartSafe();
           return;
         }
-        function openTabInNewWindow(name) {
-          var url = new URL(window.location.href);
-          url.searchParams.set('panel', name);
-          var child = window.open(url.toString(), '_blank');
-          if (!child) {
-            // Popup blockers may prevent window.open; keep the user on the same page.
-            window.location.href = url.toString();
-          }
-        }
         function tfFromUrl(){ var raw = new URLSearchParams(window.location.search).get('tf'); return TFs.indexOf(raw) >= 0 ? raw : null; }
         function panelFromUrl(){
           try {
