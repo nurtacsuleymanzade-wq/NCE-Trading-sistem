@@ -349,10 +349,18 @@
         function analyzeMoneyFlow(list,tf){var rows=closedBars(list||curData).slice(-220);function sum(a,f){return a.reduce(function(n,x){return n+(+f(x)||0);},0);}var vols=rows.map(function(x){return +(x.v||0);}).sort(function(a,b){return a-b;});function q(p){return vols.length?vols[Math.max(0,Math.min(vols.length-1,Math.floor((vols.length-1)*p)))]:0;}var q60=q(.60),q85=q(.85),groups={large:{buy:0,sell:0,count:0},medium:{buy:0,sell:0,count:0},small:{buy:0,sell:0,count:0}},recent=rows.slice(-60);recent.forEach(function(x){var size=+(x.v||0);var group='small';if(size>=q60)group='medium';if(size>=q85)group='large';var side=x.bv>x.sv?'buy':'sell';groups[group].count++;groups[group][side]+=size;});var totalBuy=sum(rows,x=>x.bv),totalSell=sum(rows,x=>x.sv),diff=totalBuy-totalSell,direction=diff===0?'neutral':(diff>0?'upflow':'downflow');var bias=(totalBuy+totalSell)>0?(totalBuy/(totalBuy+totalSell)*100).toFixed(1):0;return {status:'PASS',time_utc:new Date().toISOString().slice(0,19),symbol:SYMBOL,timeframe:tf,direction:direction,bias:bias,groups:groups,totalBuy:totalBuy,totalSell:totalSell};}
         function moneyFlowView(j){function pct(x){return ((+x||0)*100).toFixed(1)+'%';}function row(k,label){var g=(j.groups||{})[k]||{};return '<tr><td>'+esc(label)+'</td><td>'+esc(g.side||'-')+'</td><td>'+pct(g.bias)+'</td><td>$'+fmtNum(g.buy||0,0)+'</td><td>$'+fmtNum(g.sell||0,0)+'</td><td>'+esc(g.count||0)+'</td></tr>';}return '<div class="term-grid">'+pill('Status',j.status==='PASS',j.status)+pill('Direction',j.status==='PASS',j.direction||'-')+card('Money direction','<b>'+esc(j.direction||'-')+'</b> ('+pct(j.bias)+') | Bal: $'+fmtNum(j.totalBuy)+'/ $'+fmtNum(j.totalSell))+'<table class="term-table"><tr><th>Group</th><th>Dominant Side</th><th>Bias</th><th>Buy Vol</th><th>Sell Vol</th><th>Count</th></tr>'+row('large','Large Whales')+'<tr><td>'+esc('Medium Traders')+'</td><td>'+esc(groups.medium.side||'-')+'</td><td>'+pct(groups.medium.bias)+'</td><td>$'+fmtNum(groups.medium.buy||0,0)+'</td><td>$'+fmtNum(groups.medium.sell||0,0)+'</td><td>'+esc(groups.medium.count||0)+'</td></tr>'+row('small','Retail')+'</table></div>';}
         function renderMoneyFlowTab(j){window.__nceMoneyFlow=j;var term=document.getElementById('terminal');if(term)term.innerHTML=moneyFlowView(j);return j;}
-        function loadMoneyFlowLocal(tf){return apiGet('/api/v1/moneyflow/state?tf='+encodeURIComponent(tf)).catch(function(e){console.warn('moneyflow api failed',e&&e.message||e);return Promise.resolve(analyzeMoneyFlow(curData,tf));});}
+        function loadMoneyFlowLocal(tf){
+          // Money Flow is intentionally computed from the visible, real candle-volume
+          // series. Do not call the removed /moneyflow/state endpoint and hide a 404.
+          var j = analyzeMoneyFlow(curData, tf);
+          j.source = 'Binance candle volume / frontend calculation';
+          j.data_status = curData && curData.length ? 'LIVE_VISIBLE_BARS' : 'INSUFFICIENT DATA';
+          j.warning = curData && curData.length ? null : 'Bu timeframe üçün kifayət qədər candle volume məlumatı yoxdur.';
+          return Promise.resolve(j);
+        }
         function smartMoneyView(j){var events=j.events||[];var labels=j.labels||{};var sw=(j.swings||[]).map(function(x){return '<tr><td>'+esc(x.type)+'</td><td>$'+fmtNum(x.price,2)+'</td><td>'+(x.time?new Date(x.time*1000).toLocaleString():'N/A')+'</td></tr>';});var obs=(j.order_blocks||[]).map(function(x){return '<tr><td>'+esc(x.type)+'</td><td>$'+fmtNum(x.price,2)+'</td><td>'+(x.time?new Date(x.time*1000).toLocaleString():'N/A')+'</td><td>'+fmtNum(x.liquidity,0)+'</td></tr>';});var bbs=(j.breaker_blocks||[]).map(function(x){return '<tr><td>'+esc(x.type)+'</td><td>$'+fmtNum(x.price,2)+'</td><td>'+(x.time?new Date(x.time*1000).toLocaleString():'N/A')+'</td><td>'+fmtNum(x.liquidity,0)+'</td></tr>';});var ev=(events.slice(-8)||[]).map(function(x){return '<tr><td>'+esc(x.type)+'</td><td>'+esc(x.label)+'</td><td>'+(x.time?new Date(x.time*1000).toLocaleString():'N/A')+'</td></tr>';}).join('');return '<div class="term-grid">'+pill('Status',j.status==='PASS',j.status)+pill('Analysis Date',true,j.time_utc||'')+card('Swings','<table class="term-table"><tr><th>Type</th><th>Price</th><th>Time</th></tr>'+sw.join('')+'</table>')+card('Order Blocks','<table class="term-table"><tr><th>Type</th><th>Price</th><th>Time</th><th>Liquidity</th></tr>'+obs.join('')+'</table>')+card('Breaker Blocks','<table class="term-table"><tr><th>Type</th><th>Price</th><th>Time</th><th>Liquidity</th></tr>'+bbs.join('')+'</table>')+card('Recent Events','<table class="term-table"><tr><th>Type</th><th>Label</th><th>Time</th></tr>'+ev+'</table>')+'</div>';}
         function renderSmartMoneyTab(j){window.__nceSmartMoney=j;var term=document.getElementById('terminal');if(term)term.innerHTML=smartMoneyView(j);return j;}
-        function loadSmartMoneyLocal(tf){return apiGet('/api/v1/smartmoney/state?tf='+encodeURIComponent(tf)).catch(function(e){console.warn('smart money api failed',e&&e.message||e);return Promise.resolve({status:'SOURCE_MISSING',time_utc:new Date().toISOString().slice(0,19),symbol:SYMBOL,timeframe:tf,events:[],swings:[],order_blocks:[],breaker_blocks:[],labels:{},warning:'Smart money data source not connected.'});});}
+        function loadSmartMoneyLocal(tf){return apiGet('/api/v1/smart-money/state?tf='+encodeURIComponent(tf)).catch(function(e){console.warn('smart money api failed',e&&e.message||e);return Promise.resolve({status:'SOURCE_MISSING',time_utc:new Date().toISOString().slice(0,19),symbol:SYMBOL,timeframe:tf,events:[],swings:[],order_blocks:[],breaker_blocks:[],labels:{},warning:'Smart money data source not connected.'});});}
         var macroEvents = [
           {type: 'US CPI / Inflation', impact: 'high', status: 'needs_live_source', source: 'bls.gov', watch: 'core inflation, fed reaction, market sentiment'},
           {type: 'US FOMC Meeting / Rate Decision', impact: 'high', status: 'needs_live_source', source: 'federalreserve.gov', watch: 'rate hike/cut, dot plot, fed statement'},
@@ -548,13 +556,17 @@
             .then(function(j){ document.getElementById('terminal').innerHTML = realTradingPaperView(j); })
             .catch(function(e){ if (out) out.innerHTML = '<pre class="backend-bad">'+esc(e.message||e)+'</pre>'; });
         }
-        function setTab(name) {
+        function setTab(name, fromHistory) {
           var term = document.getElementById('terminal');
           try {
             var panelUrl = new URL(window.location.href);
             if (name === 'Grafik') panelUrl.searchParams.delete('panel');
             else panelUrl.searchParams.set('panel', name);
-            window.history.replaceState({}, '', panelUrl.toString());
+            if (fromHistory) window.history.replaceState({panel: name}, '', panelUrl.toString());
+            else {
+              var currentPanel = panelFromUrl();
+              if (currentPanel !== name) window.history.pushState({panel: name}, '', panelUrl.toString());
+            }
           } catch (e) {}
           document.querySelectorAll('#tabs button').forEach(function(b){ b.classList.toggle('on', b.textContent === name); });
           if (name === 'Grafik') {
@@ -565,7 +577,7 @@
           }
           document.body.classList.add('panel-mode');
           term.style.display = 'block';
-          term.innerHTML = '<div class="panel-page-head"><button class="panel-back" onclick="window.location.href=window.location.pathname">← Qrafikə qayıt</button><h2>' + esc(name) + '</h2></div><div id="panel-content"><pre>Loading ' + esc(name) + '...</pre></div>';
+          term.innerHTML = '<div class="panel-page-head"><button class="panel-back" onclick="setTab(\'Grafik\')">← Qrafikə qayıt</button><h2>' + esc(name) + '</h2></div><div id="panel-content"><pre>Loading ' + esc(name) + '...</pre></div>';
           resizeChartSafe();
           var tf = curTF || '1m';
           var map = {
@@ -609,6 +621,7 @@
             return name && TERMINAL_TABS.indexOf(name) !== -1 ? name : null;
           } catch(e) { return null; }
         }
+        window.addEventListener('popstate', function(){ setTab(panelFromUrl() || 'Grafik', true); });
         function applyPanelMode(){ if (panelFromUrl()) document.body.classList.add('panel-mode'); }
         function initTabs(){
           var bar = document.getElementById('tabs');
@@ -819,10 +832,8 @@
         init();
         resizeChartSafe();
         setWsLabel();
-        try { pollBackend(); } catch(e) { console.warn('pollBackend not defined'); }
         loadTF(curTF);
         setInterval(function(){ if (curTF !== '1s') showStats(curTF, curData); }, 60000);
-        setInterval(function(){ try { pollBackend(); } catch(e) {} }, 60000);
 
         /* ====== UMPE Functions ====== */
         function loadUMPE() {
