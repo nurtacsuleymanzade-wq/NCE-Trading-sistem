@@ -24,6 +24,26 @@
         #tf button:hover { background-color: #161b22; color: #fff; }
         #tf button.on { background-color: #1f6feb; border-color: #388bfd; color: #fff; }
         #terminal pre { white-space: pre-wrap; word-wrap: break-word; margin: 0; font-family: 'Consolas', 'Monaco', 'Andale Mono', 'Ubuntu Mono', monospace; }
+        /* Dedicated tab page: never squeeze tab data below the chart. */
+        body.panel-mode #container { height: 100vh; min-height: 100vh; }
+        body.panel-mode #chart-container,
+        body.panel-mode #panel-bar { display: none !important; }
+        body.panel-mode #terminal { display: block !important; flex: 1 1 auto; max-height: none; min-height: 0; overflow-y: auto; padding: clamp(14px, 3vw, 32px); border-top: 0; }
+        .panel-page-head { display: flex; align-items: center; gap: 14px; max-width: 1400px; margin: 0 auto 18px; }
+        .panel-page-head h2 { margin: 0; color: #58a6ff; font-size: clamp(1.1rem, 2vw, 1.7rem); }
+        .panel-back { background: #21262d; color: #c9d1d9; border: 1px solid #484f58; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-size: .9rem; }
+        .panel-back:hover { background: #30363d; color: #fff; }
+        body.panel-mode .term-grid { max-width: 1400px; margin: 0 auto; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 14px; }
+        body.panel-mode .term-card { padding: 16px; line-height: 1.5; }
+        @media (max-width: 600px) {
+            body.panel-mode #header { flex-wrap: wrap; gap: 6px; }
+            body.panel-mode #price-info { order: 3; width: 100%; overflow-x: auto; }
+            body.panel-mode #tf { display: none !important; }
+            body.panel-mode #tabs { padding: 5px; }
+            body.panel-mode #tabs button { padding: 8px 10px; font-size: .78rem; }
+            body.panel-mode #terminal { padding: 12px; }
+            .panel-page-head { align-items: flex-start; flex-direction: column; gap: 8px; }
+        }
         #chart-container { flex-grow: 1; background-color: #0d1117; position: relative; }
         #ct { width: 100%; height: 100%; }
         #liveBtn { position: absolute; top: 10px; right: 10px; background-color: #238636; color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 0.8em; opacity: 0.55; transition: opacity 0.3s; z-index: 10; }
@@ -532,12 +552,14 @@
           var term = document.getElementById('terminal');
           document.querySelectorAll('#tabs button').forEach(function(b){ b.classList.toggle('on', b.textContent === name); });
           if (name === 'Grafik') {
+            document.body.classList.remove('panel-mode');
             term.style.display = 'none';
             resizeChartSafe();
             return;
           }
+          document.body.classList.add('panel-mode');
           term.style.display = 'block';
-          term.innerHTML = '<pre>Loading ' + esc(name) + '...</pre>';
+          term.innerHTML = '<div class="panel-page-head"><button class="panel-back" onclick="window.location.href=window.location.pathname">← Qrafikə qayıt</button><h2>' + esc(name) + '</h2></div><div id="panel-content"><pre>Loading ' + esc(name) + '...</pre></div>';
           resizeChartSafe();
           var tf = curTF || '1m';
           var map = {
@@ -559,9 +581,9 @@
           };
           var fn = map[name];
           if (fn) {
-            fn().then(function(j){ if (term) term.innerHTML = terminalView(name, j); }).catch(function(e){ if (term) term.innerHTML = '<pre class="backend-bad">Error loading ' + esc(name) + ': ' + esc(e.message || e) + '</pre>'; });
+            fn().then(function(j){ var content = document.getElementById('panel-content'); if (content) content.innerHTML = terminalView(name, j); }).catch(function(e){ var content = document.getElementById('panel-content'); if (content) content.innerHTML = '<pre class="backend-bad">Error loading ' + esc(name) + ': ' + esc(e.message || e) + '</pre>'; });
           } else {
-            if (term) term.innerHTML = '<pre>Tab logic for ' + esc(name) + ' not implemented.</pre>';
+            var content = document.getElementById('panel-content'); if (content) content.innerHTML = '<pre>Tab logic for ' + esc(name) + ' not implemented.</pre>';
           }
           resizeChartSafe();
           return;
@@ -581,6 +603,7 @@
             return name && TERMINAL_TABS.indexOf(name) !== -1 ? name : null;
           } catch(e) { return null; }
         }
+        function applyPanelMode(){ if (panelFromUrl()) document.body.classList.add('panel-mode'); }
         function initTabs(){
           var bar = document.getElementById('tabs');
           bar.innerHTML = '';
@@ -783,6 +806,7 @@
         window.__nceDebug = { data: function(){ return curData; }, chart: function(){ return chart; }, followLive: function(){ return followLive; }, setTF: loadTF, goLive: goLive, resize: resizeChartSafe };
         document.getElementById('liveBtn').onclick = goLive;
         initTabs();
+        applyPanelMode();
         var initialPanel = panelFromUrl();
         if (initialPanel) setTab(initialPanel);
         updBar();
