@@ -565,7 +565,11 @@
         }
         function realTradingPaperView(j) {
           var scope = j.scope || {}, paper = j.paper || {};
-          var html = '<div class="term-grid">';
+          var html = responseStatus(j) + '<div class="term-grid">';
+          if (j.time_utc) html += pill('Updated UTC', true, j.time_utc.slice(11,19) + ' UTC');
+          if (j.symbol || paper.symbol) html += pill('Symbol', true, j.symbol || paper.symbol);
+          html += pill('TF', true, j.timeframe || paper.timeframe || curTF);
+          html += pill('Safety', scope.real_trading === false && scope.order_execution === false, scope.real_trading === false && scope.order_execution === false ? 'PAPER ONLY · real trading disabled' : 'CHECK SCOPE');
           html += card('Paper Balance', 'Balance: <b>$'+fmtNum(paper.balance_usdt,2)+'</b><br>In positions: <b>$'+fmtNum(paper.in_positions,2)+'</b><br>PnL: <span style="color:'+(paper.pnl_usdt>=0?'#3fb950':'#f85149')+'"><b>$'+fmtNum(paper.pnl_usdt,2)+'</b></span>');
           html += card('Trading scope', listObj(scope));
           html += card('Open positions', (paper.positions||[]).map(function(p){ return esc(p.side)+' $'+esc(p.entry)+' size '+esc(p.qty)+' PnL <span style="color:'+(p.pnl_usdt>=0?'#3fb950':'#f85149')+'">$'+fmtNum(p.pnl_usdt,2)+'</span>'; }).join('<br>')||'No open positions');
@@ -924,7 +928,7 @@
 
         function renderUMPEView(j) {
             if (j.status === 'ERROR') {
-                return '<div class="backend-bad">Error loading UMPE: ' + esc(j.error) + '</div>';
+                return responseStatus(j) + '<div class="term-grid"><div class="term-card backend-bad">Error loading UMPE: ' + esc(j.error) + '</div></div>';
             }
             var scores = j.scores || {};
             var l1 = j.layer1 || {};
@@ -1051,7 +1055,7 @@
             if (!hasEv) evHtml += '<div class="umpe-vis">No evidence sources connected yet.</div>';
 
             // Combine everything
-            var html = '<div class="umpe-dash">';
+            var html = responseStatus(j) + '<div class="umpe-dash">';
             html += scenarioBanner;
             html += '<div class="umpe-scores">' + scoreCards + '</div>';
             html += layerToggles;
