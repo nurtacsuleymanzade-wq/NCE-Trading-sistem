@@ -551,7 +551,7 @@
             'Makro ve Haber': function() { return loadMacroNewsLocal(tf); },
             'Simülasyon': function() { return apiGet('/api/v1/simulation/state?tf=' + encodeURIComponent(tf)); },
             'UMPE Skorları': function() { return loadUMPE(); },
-            'Historical Replay / Backtest': function() { return apiGet('/api/v1/backtest/state?tf=' + encodeURIComponent(tf)); },
+            'Historical Replay / Backtest': function() { return apiGet('/api/v1/replay/history?tf=' + encodeURIComponent(tf)); },
             'Data Health': function() { return apiGet('/api/v1/data-health'); },
             'Real Trading / Paper': function() { return reloadRealTradingPaper(); }
           };
