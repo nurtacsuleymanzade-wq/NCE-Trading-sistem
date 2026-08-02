@@ -897,38 +897,20 @@
         /* ====== UMPE Functions ====== */
         function loadUMPE() {
             var tf = curTF || '1m';
-            // Trigger update first, then fetch all layers
-            var p1 = fetch(API_BASE + '/api/v1/umpe/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: SYMBOL, timeframe: tf }) })
-                .then(function(r){ if (!r.ok) throw Error('umpe/update HTTP ' + r.status); return r.json(); }).catch(function(e){ console.warn('umpe/update', e.message); return null; });
-            var p2 = apiGet('/api/v1/umpe/scores?tf=' + encodeURIComponent(tf));
-            var p3 = apiGet('/api/v1/umpe/layer1?tf=' + encodeURIComponent(tf));
-            var p4 = apiGet('/api/v1/umpe/layer2?tf=' + encodeURIComponent(tf));
-            return Promise.all([p1, p2, p3, p4]).then(function(results) {
-                return {
-                    status: 'PASS',
-                    time_utc: new Date().toISOString().slice(0, 19),
-                    symbol: SYMBOL,
-                    timeframe: tf,
-                    update_result: results[0],
-                    scores: results[1] || {},
-                    layer1: results[2] || {},
-                    layer2: results[3] || {}
-                };
-            }).catch(function(e) {
-                return {
-                    status: 'ERROR',
-                    time_utc: new Date().toISOString().slice(0, 19),
-                    error: e.message || String(e),
-                    scores: {},
-                    layer1: {},
-                    layer2: {}
-                };
+            // UMPE routes are not part of the deployed backend contract. Do not
+            // fabricate score values or issue guaranteed-404 requests.
+            return Promise.resolve({
+                status: 'WARN',
+                time_utc: new Date().toISOString().slice(0, 19),
+                symbol: SYMBOL,
+                timeframe: tf,
+                warning: 'UMPE backend endpoint is not deployed for this environment.'
             });
         }
 
         function renderUMPEView(j) {
-            if (j.status === 'ERROR') {
-                return responseStatus(j) + '<div class="term-grid"><div class="term-card backend-bad">Error loading UMPE: ' + esc(j.error) + '</div></div>';
+            if (j.status === 'ERROR' || j.status === 'WARN') {
+                return responseStatus(j) + '<div class="term-grid"><div class="term-card backend-warn">' + esc(j.warning || j.error || 'UMPE data is not available for this environment.') + '<br><br>No numeric UMPE scores are shown because a verified backend source is unavailable.</div></div>';
             }
             var scores = j.scores || {};
             var l1 = j.layer1 || {};
