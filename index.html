@@ -15,14 +15,20 @@
         #cg { font-size: 1em; padding: 4px 8px; border-radius: 4px; }
         .gn { background-color: #238636; } /* Green */
         .rd { background-color: #f85149; } /* Red */
-        #tabs { background-color: #161b22; padding: 5px 10px; border-bottom: 1px solid #30363d; display: flex; overflow-x: auto; }
-        #tabs button { background: none; border: none; color: #8b949e; padding: 8px 15px; cursor: pointer; font-size: 0.9em; transition: color 0.2s, border-color 0.2s; }
-        #tabs button.on { color: #ffffff; border-bottom: 2px solid #388bfd; }
+        #tabs { background-color: #161b22; padding: 5px 10px; border-bottom: 1px solid #30363d; display: flex; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: thin; }
+        #tabs button { flex: 0 0 auto; background: none; border: none; border-bottom: 2px solid transparent; color: #8b949e; padding: 8px 15px; cursor: pointer; font-size: 0.9em; transition: color 0.2s, border-color 0.2s, background-color 0.2s; }
+        #tabs button.on { color: #ffffff; background: #1f6feb33; border-bottom-color: #388bfd; font-weight: 700; }
         #tabs button:hover { color: #ffffff; }
         #terminal { max-height: 45vh; min-height: 100px; background-color: #0d1117; padding: 15px; overflow-y: auto; border-top: 1px solid #30363d; }
         #tf button { background: none; border: 1px solid #30363d; color: #8b949e; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em; white-space: nowrap; }
         #tf button:hover { background-color: #161b22; color: #fff; }
-        #tf button.on { background-color: #1f6feb; border-color: #388bfd; color: #fff; }
+        #tf button.on { background-color: #1f6feb; border-color: #58a6ff; color: #fff; font-weight: 700; box-shadow: 0 0 0 1px #58a6ff66; }
+        .panel-status { display:flex; align-items:center; gap:8px; padding:10px 12px; margin-bottom:14px; border:1px solid #30363d; border-left:4px solid #8b949e; border-radius:6px; background:#161b22; font-weight:600; }
+        .panel-status.loading { border-left-color:#58a6ff; color:#58a6ff; }
+        .panel-status.success { border-left-color:#3fb950; color:#3fb950; }
+        .panel-status.warning { border-left-color:#d29922; color:#f2cc60; }
+        .panel-status.error { border-left-color:#f85149; color:#ff7b72; }
+        .panel-status .status-detail { color:#c9d1d9; font-weight:400; }
         #terminal pre { white-space: pre-wrap; word-wrap: break-word; margin: 0; font-family: 'Consolas', 'Monaco', 'Andale Mono', 'Ubuntu Mono', monospace; }
         /* Dedicated tab page: never squeeze tab data below the chart. */
         body.panel-mode #container { height: 100vh; min-height: 100vh; }
@@ -38,7 +44,7 @@
         @media (max-width: 600px) {
             body.panel-mode #header { flex-wrap: wrap; gap: 6px; }
             body.panel-mode #price-info { order: 3; width: 100%; overflow-x: auto; }
-            body.panel-mode #tf { display: none !important; }
+            body.panel-mode #tf { display: flex !important; width: 100%; order: 4; margin-left: 0 !important; overflow-x: auto; padding-bottom: 2px; }
             body.panel-mode #tabs { padding: 5px; }
             body.panel-mode #tabs button { padding: 8px 10px; font-size: .78rem; }
             body.panel-mode #terminal { padding: 12px; }
@@ -187,7 +193,40 @@
                 .then(function(r){ if(r.ok) { console.log('MARKETGET fallback ok', fallbackUrl, Date.now()); return r.json(); } throw Error('status ' + r.status); });
             });
         }
-        function apiGet(url) { var full = (url.indexOf('http') === 0) ? url : API_BASE + url; return fetch(full, { signal: AbortSignal.timeout(8000) }).then(function(r){ if(r.ok) return r.json(); throw Error('status ' + r.status); }); }
+        var activePanelRequestSeq = 0, activePanelName = '';
+        function requestJson(url, options) {
+          options = options || {};
+          var full = (url.indexOf('http') === 0) ? url : API_BASE + url;
+          var requestSeq = options.requestSeq || activePanelRequestSeq || 0;
+          var tf = options.timeframe || curTF || '1m';
+          var symbol = options.symbol || SYMBOL;
+          var started = Date.now();
+          var fetchOptions = Object.assign({}, options);
+          delete fetchOptions.requestSeq; delete fetchOptions.timeframe; delete fetchOptions.symbol;
+          return fetch(full, Object.assign({ signal: AbortSignal.timeout(8000) }, fetchOptions)).then(function(r) {
+            return r.clone().text().then(function(raw) {
+              var body = raw; try { body = raw ? JSON.parse(raw) : null; } catch (_) {}
+              console.debug('NCE API response', {url: full, httpStatus: r.status, responseBody: body, timeframe: tf, symbol: symbol, requestSequence: requestSeq, elapsedMs: Date.now()-started});
+              if (!r.ok) { var err = new Error('HTTP ' + r.status + ' for ' + full); err.kind = 'backend'; err.url = full; err.httpStatus = r.status; err.responseBody = body; throw err; }
+              if (body === null || typeof body !== 'object') { var invalid = new Error('Invalid response from ' + full); invalid.kind = 'invalid'; invalid.url = full; invalid.httpStatus = r.status; invalid.responseBody = body; throw invalid; }
+              return body;
+            });
+          }).catch(function(err) {
+            console.error('NCE API request failed', {url: full, httpStatus: err.httpStatus || null, responseBody: err.responseBody || null, timeframe: tf, symbol: symbol, requestSequence: requestSeq, error: err.message || String(err)});
+            throw err;
+          });
+        }
+        function apiGet(url, options) { return requestJson(url, Object.assign({}, options || {}, {method:'GET'})); }
+        function panelStatus(kind, label, detail) { var icons = {loading:'⏳',success:'✓',warning:'⚠',error:'✕'}; return '<div class="panel-status '+esc(kind)+'"><span aria-hidden="true">'+(icons[kind]||'•')+'</span><span>'+esc(label)+'</span>'+(detail?'<span class="status-detail">'+esc(detail)+'</span>':'')+'</div>'; }
+        function payloadStatus(j) {
+          if (!j) return {kind:'warning', label:'No data available', detail:'response boşdur'};
+          var s = String(j.status || '').toUpperCase();
+          if (s === 'PASS' || s === 'OK' || s === 'COMPLETED' || s === 'PARTIAL PASS') return s === 'PARTIAL PASS' || j.warning ? {kind:'warning',label:'Data loaded',detail:j.warning || 'partial data'} : {kind:'success',label:'Data loaded'};
+          if (s.indexOf('SOURCE_MISSING') >= 0 || s.indexOf('INSUFFICIENT') >= 0 || s.indexOf('NO DATA') >= 0 || (Array.isArray(j.events) && !j.events.length && j.warning)) return {kind:'warning',label:'No data available',detail:j.warning || j.reason || ''};
+          if (s.indexOf('INVALID') >= 0) return {kind:'error',label:'Invalid response',detail:j.warning || j.reason || ''};
+          return {kind:'warning',label:'Data loaded',detail:j.warning || ''};
+        }
+        function responseStatus(j) { var p = payloadStatus(j); return panelStatus(p.kind, p.label, p.detail); }
         var headerPrice = null, headerPrevPrice = null, headerPriceTs = 0;
         var oneSecondBars = {};
         var loadSeq = 0;
@@ -448,7 +487,8 @@
         }
 
         function terminalView(name, j) {
-          var html = '<div class="term-grid">';
+          var pstatus = payloadStatus(j);
+          var html = responseStatus(j) + '<div class="term-grid">';
           // Status pill for every tab
           var s = j && j.status;
           if (s) html += pill('Status', s === 'PASS' || s === 'OK', s);
@@ -558,6 +598,8 @@
         }
         function setTab(name, fromHistory) {
           var term = document.getElementById('terminal');
+          var panelRequestSeq = ++activePanelRequestSeq;
+          activePanelName = name;
           try {
             var panelUrl = new URL(window.location.href);
             if (name === 'Grafik') panelUrl.searchParams.delete('panel');
@@ -577,11 +619,11 @@
           }
           document.body.classList.add('panel-mode');
           term.style.display = 'block';
-          term.innerHTML = '<div class="panel-page-head"><button class="panel-back" onclick="setTab(\'Grafik\')">← Qrafikə qayıt</button><h2>' + esc(name) + '</h2></div><div id="panel-content"><pre>Loading ' + esc(name) + '...</pre></div>';
+          term.innerHTML = '<div class="panel-page-head"><button class="panel-back" onclick="setTab(\'Grafik\')">← Qrafikə qayıt</button><h2>' + esc(name) + '</h2></div><div id="panel-content">' + panelStatus('loading', 'Loading...', name + ' · TF ' + (curTF || '1m')) + '</div>';
           resizeChartSafe();
           var tf = curTF || '1m';
           var map = {
-            'Trader Hova': function() { return fetch(API_BASE + '/api/v1/hova/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'terminal_state', timeframe: tf, source: 'website' }) }).then(function(r){ if (!r.ok) throw Error('hova/chat HTTP ' + r.status); return r.json(); }); },
+            'Trader Hova': function() { return requestJson('/api/v1/hova/chat', { method: 'POST', requestSeq: panelRequestSeq, timeframe: tf, symbol: SYMBOL, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'terminal_state', timeframe: tf, source: 'website' }) }); },
             'Long/Short Skoru': function() { return apiGet('/api/v1/score?tf=' + encodeURIComponent(tf)); },
             'Olasılık Haritası': function() { return apiGet('/api/v1/probability?tf=' + encodeURIComponent(tf)); },
             'Order Flow': function() { return apiGet('/api/v1/orderflow/state?tf=' + encodeURIComponent(tf)); },
@@ -599,9 +641,19 @@
           };
           var fn = map[name];
           if (fn) {
-            fn().then(function(j){ var content = document.getElementById('panel-content'); if (content) content.innerHTML = terminalView(name, j); }).catch(function(e){ var content = document.getElementById('panel-content'); if (content) content.innerHTML = '<pre class="backend-bad">Error loading ' + esc(name) + ': ' + esc(e.message || e) + '</pre>'; });
+            fn().then(function(j){
+              if (panelRequestSeq !== activePanelRequestSeq || activePanelName !== name || curTF !== tf) {
+                console.warn('NCE stale response ignored', {panel:name, timeframe:tf, symbol:SYMBOL, requestSequence:panelRequestSeq, activeRequestSequence:activePanelRequestSeq});
+                return;
+              }
+              var content = document.getElementById('panel-content'); if (content) content.innerHTML = terminalView(name, j);
+            }).catch(function(e){
+              if (panelRequestSeq !== activePanelRequestSeq || activePanelName !== name || curTF !== tf) { console.warn('NCE stale error ignored', {panel:name, timeframe:tf, requestSequence:panelRequestSeq}); return; }
+              var content = document.getElementById('panel-content');
+              if (content) { var invalid = e && e.kind === 'invalid'; content.innerHTML = panelStatus('error', invalid ? 'Invalid response' : 'Backend unavailable', invalid ? 'response schema tanınmadı.' : 'Trader Hova məlumatı hazırda yüklənə bilmədi. Səbəb: backend response alınmadı. Yenidən yoxla.'); }
+            });
           } else {
-            var content = document.getElementById('panel-content'); if (content) content.innerHTML = '<pre>Tab logic for ' + esc(name) + ' not implemented.</pre>';
+            var content = document.getElementById('panel-content'); if (content) content.innerHTML = panelStatus('warning', 'No data available', 'Bu panel üçün fetch implementasiya edilməyib.');
           }
           resizeChartSafe();
           return;
