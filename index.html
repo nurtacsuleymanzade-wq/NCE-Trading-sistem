@@ -667,6 +667,7 @@
             window.location.href = url.toString();
           }
         }
+        function tfFromUrl(){ var raw = new URLSearchParams(window.location.search).get('tf'); return TFs.indexOf(raw) >= 0 ? raw : null; }
         function panelFromUrl(){
           try {
             var name = new URLSearchParams(window.location.search).get('panel');
@@ -878,6 +879,8 @@
         document.getElementById('liveBtn').onclick = goLive;
         initTabs();
         applyPanelMode();
+        var initialTF = tfFromUrl() || localStorage.getItem('nceCurrentTF');
+        if (TFs.indexOf(initialTF) >= 0) curTF = initialTF;
         var initialPanel = panelFromUrl();
         if (initialPanel) setTab(initialPanel);
         updBar();
