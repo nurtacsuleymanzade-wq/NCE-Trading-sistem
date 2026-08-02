@@ -462,13 +462,12 @@
         function terminalView(name, j) {
           var pstatus = payloadStatus(j);
           var html = responseStatus(j) + '<div class="term-grid">';
-          // Status pill for every tab
-          var s = j && j.status;
-          if (s) html += pill('Status', s === 'PASS' || s === 'OK', s);
-          if (j && j.time_utc) html += pill('Updated UTC', true, j.time_utc.slice(11,19) + ' UTC');
-          if (j && j.symbol) html += pill('Symbol', true, j.symbol);
-          if (j && j.timeframe) html += pill('TF', true, j.timeframe);
-          else html += pill('TF', true, curTF || '1m');
+          var s = (j && j.status) || (pstatus === 'PASS' ? 'PASS' : 'WARN');
+          html += pill('Status', s === 'PASS' || s === 'OK', s);
+          html += pill('Updated UTC', true, j && j.time_utc ? j.time_utc.slice(11,19) + ' UTC' : new Date().toISOString().slice(11,19) + ' UTC');
+          html += pill('Symbol', true, (j && j.symbol) || SYMBOL);
+          html += pill('TF', true, (j && j.timeframe) || curTF || '1m');
+          html += pill('Source', !!(j && (j.source || j.data_source)), (j && (j.source || j.data_source)) || 'Backend / panel payload');
 
           if (name === 'Trader Hova') {
             html += card('Current State', 'Mode: <b>' + esc(j.mode || 'research_only') + '</b><br>Confidence: <b>' + esc(j.confidence || 'LOW') + '</b><br>TF: <b>' + esc(j.timeframe || curTF) + '</b>');
@@ -541,9 +540,11 @@
         function realTradingPaperView(j) {
           var scope = j.scope || {}, paper = j.paper || {};
           var html = responseStatus(j) + '<div class="term-grid">';
-          if (j.time_utc) html += pill('Updated UTC', true, j.time_utc.slice(11,19) + ' UTC');
-          if (j.symbol || paper.symbol) html += pill('Symbol', true, j.symbol || paper.symbol);
-          html += pill('TF', true, j.timeframe || paper.timeframe || curTF);
+          html += pill('Status', j.status === 'PASS' || j.status === 'OK', j.status || 'PASS');
+          html += pill('Updated UTC', true, j.time_utc ? j.time_utc.slice(11,19) + ' UTC' : new Date().toISOString().slice(11,19) + ' UTC');
+          html += pill('Symbol', true, j.symbol || paper.symbol || SYMBOL);
+          html += pill('TF', true, j.timeframe || paper.timeframe || curTF || '1m');
+          html += pill('Source', true, j.source || 'Paper trading backend');
           var realTradingEnabled = scope.real_trading_enabled === true || scope.real_trading === true;
           var orderExecutionEnabled = scope.order_execution_enabled === true || scope.order_execution === true;
           html += pill('Safety', !realTradingEnabled && !orderExecutionEnabled, !realTradingEnabled && !orderExecutionEnabled ? 'PAPER ONLY · real trading disabled' : 'CHECK SCOPE');
