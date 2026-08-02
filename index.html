@@ -156,17 +156,18 @@
         function marketGet(localPath, fallbackUrl) {
           // Try local API first, fallback to Binance/CORS
           console.log('MARKETGET start', localPath, Date.now());
-          return fetch(localPath, { signal: AbortSignal.timeout(5000) })
-            .then(function(r){ if(r.ok) { console.log('MARKETGET local ok', localPath, Date.now()); return r.json(); } throw Error('status ' + r.status); })
+          var fullPath = (localPath.indexOf('http') === 0) ? localPath : API_BASE + localPath;
+          return fetch(fullPath, { signal: AbortSignal.timeout(5000) })
+            .then(function(r){ if(r.ok) { console.log('MARKETGET local ok', fullPath, Date.now()); return r.json(); } throw Error('status ' + r.status); })
             .catch(function(e){
-              console.log('MARKETGET local fail', localPath, e.message || e, Date.now());
+              console.log('MARKETGET local fail', fullPath, e.message || e, Date.now());
               if (!fallbackUrl) throw Error('no fallback');
               console.log('MARKETGET fallback', fallbackUrl, Date.now());
               return fetch(fallbackUrl, { signal: AbortSignal.timeout(8000) })
                 .then(function(r){ if(r.ok) { console.log('MARKETGET fallback ok', fallbackUrl, Date.now()); return r.json(); } throw Error('status ' + r.status); });
             });
         }
-        function apiGet(url) { return fetch(url, { signal: AbortSignal.timeout(8000) }).then(function(r){ if(r.ok) return r.json(); throw Error('status ' + r.status); }); }
+        function apiGet(url) { var full = (url.indexOf('http') === 0) ? url : API_BASE + url; return fetch(full, { signal: AbortSignal.timeout(8000) }).then(function(r){ if(r.ok) return r.json(); throw Error('status ' + r.status); }); }
         var headerPrice = null, headerPrevPrice = null, headerPriceTs = 0;
         var oneSecondBars = {};
         var loadSeq = 0;
