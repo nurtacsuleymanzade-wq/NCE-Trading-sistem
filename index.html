@@ -858,9 +858,9 @@
         var initialTF = tfFromUrl() || localStorage.getItem('nceCurrentTF');
         if (TFs.indexOf(initialTF) >= 0) curTF = initialTF;
         var initialPanel = panelFromUrl();
-        if (initialPanel) setTab(initialPanel);
         updBar();
         init();
+        if (initialPanel) setTab(initialPanel);
         resizeChartSafe();
         setWsLabel();
         loadTF(curTF);
