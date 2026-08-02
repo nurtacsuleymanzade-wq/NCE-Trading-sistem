@@ -245,6 +245,7 @@
           if (s === 'PASS' || s === 'OK' || s === 'COMPLETED' || s === 'PARTIAL PASS') return s === 'PARTIAL PASS' || j.warning ? {kind:'warning',label:'Data loaded',detail:j.warning || 'partial data'} : {kind:'success',label:'Data loaded'};
           if (s.indexOf('SOURCE_MISSING') >= 0 || s.indexOf('INSUFFICIENT') >= 0 || s.indexOf('NO DATA') >= 0 || (Array.isArray(j.events) && !j.events.length && j.warning)) return {kind:'warning',label:'No data available',detail:j.warning || j.reason || ''};
           if (s.indexOf('INVALID') >= 0) return {kind:'error',label:'Invalid response',detail:j.warning || j.reason || ''};
+          if (s === 'ERROR' || s.indexOf('UNAVAILABLE') >= 0 || s.indexOf('BACKEND') >= 0 || (s === 'WARN' && /backend|endpoint|unavailable|not deployed/i.test(j.warning || ''))) return {kind:'error',label:'Backend unavailable',detail:j.warning || j.reason || ''};
           return {kind:'warning',label:'Data loaded',detail:j.warning || ''};
         }
         function responseStatus(j) { var p = payloadStatus(j); return panelStatus(p.kind, p.label, p.detail); }
@@ -878,7 +879,14 @@
 
         function renderUMPEView(j) {
             if (j.status === 'ERROR' || j.status === 'WARN') {
-                return responseStatus(j) + '<div class="term-grid"><div class="term-card backend-warn">' + esc(j.warning || j.error || 'UMPE data is not available for this environment.') + '<br><br>No numeric UMPE scores are shown because a verified backend source is unavailable.</div></div>';
+                var warnMeta = '<div class="term-grid">';
+                warnMeta += pill('Status', false, j.status || 'WARN');
+                if (j.time_utc) warnMeta += pill('Updated UTC', true, j.time_utc.slice(11,19) + ' UTC');
+                if (j.symbol) warnMeta += pill('Symbol', true, j.symbol);
+                if (j.timeframe) warnMeta += pill('TF', true, j.timeframe);
+                warnMeta += pill('Source', false, j.source || 'UMPE backend');
+                warnMeta += '</div>';
+                return responseStatus(j) + warnMeta + '<div class="term-grid"><div class="term-card backend-warn">' + esc(j.warning || j.error || 'UMPE data is not available for this environment.') + '<br><br>No numeric UMPE scores are shown because a verified backend source is unavailable.</div></div>';
             }
             var scores = j.scores || {};
             var l1 = j.layer1 || {};
