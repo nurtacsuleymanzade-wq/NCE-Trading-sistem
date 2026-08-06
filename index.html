@@ -217,7 +217,7 @@
         // Globals
         var chart, cs, vs, bs, ss, guide50, guide70, guide85;
         var overlaySeries = {}, overlayLines = [], profileBox = null;
-        var curTF = '1m', curData = [], followLive = true, userScrolled = false;
+        var curTF = '1m', curData = [], followLive = true, userScrolled = false, viewportLock = false, viewportPointer = null;
         var wsKline, ws1s, wsPrice, reconnectTimers = {}, reconnectDelay = {}, wsBaseIndex = {}, wsMsgSeen = {};
         var ENABLE_LIVE = true; // Set to false to disable live updates
         var serverSkewMs = 0;
@@ -282,6 +282,9 @@
         function archiveCollectorTail(){}
         var pan = {vol:true,del:true,nai:true};
         var ind = {vwap:true,poc:true,hvn:false,lvn:false,vah:true,val:true,valueArea:true,bb:false,volumeProfile:false,marketProfile:false};
+        var structureInd = {hh:true,hl:true,lh:true,ll:true,bos:true,choch:true,msb:true,bullishOB:true,bearishOB:true,breaker:true};
+        var STRUCTURE_LABELS = {hh:'HH',hl:'HL',lh:'LH',ll:'LL',bos:'BOS',choch:'CHoCH',msb:'MSB',bullishOB:'Bull OB',bearishOB:'Bear OB',breaker:'Breaker'};
+        var STRUCTURE_COLORS = {hh:'#3fb950',hl:'#3fb950',lh:'#f85149',ll:'#f85149',bos:'#58a6ff',choch:'#f2cc60',msb:'#bc8cff',bullishOB:'#3fb950',bearishOB:'#f85149',breaker:'#d29922'};
         var IND_COLORS = {vwap:'#58a6ff',poc:'#f85149',hvn:'#f59e0b',lvn:'#a371f7',vah:'#3fb950',val:'#ef5350',bb:'#d29922',volumeProfile:'#8b949e',marketProfile:'#f2cc60'};
         var chart,cs,vs,bs,ss,guide50,guide70,guide85;
         var overlaySeries={vwap:null,bbU:null,bbM:null,bbL:null,valueArea:null}, overlayLines=[], profileBox=null;
@@ -579,7 +582,7 @@
             scoreOptional(base+'/aggTrades?symbol='+symbol+'&limit=1000'),
             scoreOptional(SCORE_DERIBIT+'/get_book_summary_by_currency?currency=BTC&kind=option')
           ]).then(function(a) {
-            var rows=scoreBars(a[0]), ticker=a[1]||{}, price=+ticker.price || (rows.length?rows[rows.length-1].c:NaN);
+            var rows=tf==='1s'&&curData&&curData.length>=60?closedBars(curData).slice(-320).map(normalizeBar):scoreBars(a[0]), ticker=a[1]||{}, price=+ticker.price || (rows.length?rows[rows.length-1].c:NaN), rowSource=tf==='1s'?'Binance aggTrade-derived 1s bars + Futures REST':'Binance Futures klines';
             if (rows.length<60 || !isFinite(price)) throw Error('Binance Futures candle verisi yetersiz.');
             var closes=rows.map(function(x){return x.c;}), profile=computeProfile(rows,48), structure=scoreStructure(rows), criteria=[], missing=[];
             function add(c){criteria.push(c);}
@@ -610,7 +613,7 @@
             if (!maxPain) missing.push('Max pain');
             add(scoreCriterion('Max pain konumu',maxPainBias,maxPain?'$'+fmtNum(maxPain.price,2)+' · fiyat '+(price<maxPain.price?'altında':'üstünde'):'Deribit option OI unavailable','Deribit BTC options OI',!!maxPain));
             var totals=criteria.filter(function(x){return x.available;}), longScore=totals.reduce(function(n,x){return n+x.long;},0), shortScore=totals.reduce(function(n,x){return n+x.short;},0), available=totals.length, neutral=Math.max(0,available-longScore-shortScore), direction=longScore>shortScore?'LONG':(shortScore>longScore?'SHORT':'WAIT'), longPct=available?longScore/available*100:0, shortPct=available?shortScore/available*100:0, directionalTotal=longScore+shortScore, longShare=directionalTotal?longScore/directionalTotal*100:50, shortShare=directionalTotal?shortScore/directionalTotal*100:50, target=scoreTarget(profile,price,direction==='LONG'?'long':(direction==='SHORT'?'short':null));
-            return {status:missing.length?'PARTIAL PASS':'PASS',time_utc:new Date().toISOString(),symbol:symbol,timeframe:tf,source:'Binance Futures REST + Deribit public options API',data_status:missing.length?'PARTIAL':'LIVE',price:price,direction:direction,criteria:criteria,long_score:longScore,short_score:shortScore,available_criteria:available,probability:{long:longPct,short:shortPct,neutral:available?neutral/available*100:100,long_share:longShare,short_share:shortShare},profile:{poc:profile.poc,vah:profile.vah,val:profile.val,hvn:profile.hvn,lvn:profile.lvn,bins:profile.bins},target:target,indicators:{funding_rate:funding,open_interest:oiCurrent,open_interest_delta:oiDelta,delta:delta,aggressive_buy:buyAgg,aggressive_sell:sellAgg,rsi:rsiNow,macd:macd[macd.length-1],macd_signal:signal[signal.length-1],max_pain:maxPain},missing:missing,warning:missing.length?'Bazı opsiyonel gerçek veri uçları cevap vermedi; yüzdeler yalnızca mevcut kanıtlar üzerinden hesaplandı.':null};
+            return {status:missing.length?'PARTIAL PASS':'PASS',time_utc:new Date().toISOString(),symbol:symbol,timeframe:tf,source:rowSource+' + Deribit public options API',data_status:missing.length?'PARTIAL':'LIVE',price:price,direction:direction,criteria:criteria,long_score:longScore,short_score:shortScore,available_criteria:available,probability:{long:longPct,short:shortPct,neutral:available?neutral/available*100:100,long_share:longShare,short_share:shortShare},profile:{poc:profile.poc,vah:profile.vah,val:profile.val,hvn:profile.hvn,lvn:profile.lvn,bins:profile.bins},target:target,indicators:{funding_rate:funding,open_interest:oiCurrent,open_interest_delta:oiDelta,delta:delta,aggressive_buy:buyAgg,aggressive_sell:sellAgg,rsi:rsiNow,macd:macd[macd.length-1],macd_signal:signal[signal.length-1],max_pain:maxPain},missing:missing,warning:missing.length?'Bazı opsiyonel gerçek veri uçları cevap vermedi; yüzdeler yalnızca mevcut kanıtlar üzerinden hesaplandı.':null};
           });
         }
         function decisionEngineView(j) {
@@ -790,7 +793,7 @@
               }
               var content = document.getElementById('panel-content'); if (content) content.innerHTML = terminalView(name, j);
               if (name === 'Long/Short Skoru' && panelRequestSeq === activePanelRequestSeq) {
-                decisionRefreshTimer = setTimeout(function(){ if (panelFromUrl() === name) setTab(name, true); }, 15000);
+                decisionRefreshTimer = setTimeout(function(){ if (panelFromUrl() === name) setTab(name, true); }, curTF === '1s' ? 3000 : 15000);
               }
             }).catch(function(e){
               if (panelRequestSeq !== activePanelRequestSeq || activePanelName !== name || curTF !== tf) { console.warn('NCE stale error ignored', {panel:name, timeframe:tf, requestSequence:panelRequestSeq}); return; }
@@ -830,6 +833,65 @@
           });
         }
 
+        function marketStructureMarkers(list) {
+          var rows = closedBars(list), markers = [], zones = [], highs = [], lows = [], left = 2, right = 2;
+          if (rows.length < 12) return {markers:markers,zones:zones};
+          function marker(x, key, position, shape) { if (structureInd[key]) markers.push({time:x.t,position:position,color:STRUCTURE_COLORS[key],shape:shape||'circle',text:STRUCTURE_LABELS[key],size:1}); }
+          for (var i=left;i<rows.length-right;i++) {
+            var isHigh=true,isLow=true;
+            for (var a=1;a<=left;a++) { isHigh=isHigh&&rows[i].h>=rows[i-a].h; isLow=isLow&&rows[i].l<=rows[i-a].l; }
+            for (var b=1;b<=right;b++) { isHigh=isHigh&&rows[i].h>rows[i+b].h; isLow=isLow&&rows[i].l<rows[i+b].l; }
+            if (isHigh) highs.push({index:i,price:rows[i].h,time:rows[i].t});
+            if (isLow) lows.push({index:i,price:rows[i].l,time:rows[i].t});
+          }
+          highs.forEach(function(x,i){ if (i<1) return; var prev=highs[i-1]; marker(rows[x.index],x.price>prev.price?'hh':'lh','aboveBar','circle'); });
+          lows.forEach(function(x,i){ if (i<1) return; var prev=lows[i-1]; marker(rows[x.index],x.price>prev.price?'hl':'ll','belowBar','circle'); });
+          var brokenHigh={},brokenLow={},activeZones=[];
+          function trendBefore(highCount, lowCount) {
+            if (highCount<3||lowCount<3) return null;
+            var h1=highs[highCount-1], h2=highs[highCount-2], l1=lows[lowCount-1], l2=lows[lowCount-2];
+            var hb=h1.price>h2.price && l1.price>l2.price;
+            var br=h1.price<h2.price && l1.price<l2.price;
+            return hb?'long':(br?'short':null);
+          }
+          function lastOppositeCandle(index,direction) {
+            for (var j=index-1;j>=Math.max(0,index-20);j--) if (direction==='long'?rows[j].c<rows[j].o:rows[j].c>rows[j].o) return rows[j];
+            return null;
+          }
+          function addOrderBlock(index,direction) {
+            var c=lastOppositeCandle(index,direction); if (!c) return;
+            var key=direction==='long'?'bullishOB':'bearishOB';
+            marker(c,key,direction==='long'?'belowBar':'aboveBar','square');
+            activeZones.push({type:direction,key:key,low:c.l,high:c.h,price:(c.l+c.h)/2,time:c.t,invalidated:false});
+          }
+          var highCursor=0, lowCursor=0, hp=null, lp=null;
+          for (var n=0;n<rows.length;n++) {
+            while (highCursor<highs.length && highs[highCursor].index<n) { hp=highs[highCursor]; highCursor++; }
+            while (lowCursor<lows.length && lows[lowCursor].index<n) { lp=lows[lowCursor]; lowCursor++; }
+            var current=rows[n];
+            if (hp && current.c>hp.price && !brokenHigh[hp.time]) {
+              var bullTrend=trendBefore(highCursor,lowCursor), bullChoch=bullTrend==='short';
+              if (structureInd.bos) marker(current,'bos','aboveBar','arrowUp');
+              if (structureInd.msb) marker(current,'msb','belowBar','arrowUp');
+              if (bullChoch && structureInd.choch) marker(current,'choch','aboveBar','circle');
+              addOrderBlock(n,'long'); brokenHigh[hp.time]=true;
+            }
+            if (lp && current.c<lp.price && !brokenLow[lp.time]) {
+              var bearTrend=trendBefore(highCursor,lowCursor), bearChoch=bearTrend==='long';
+              if (structureInd.bos) marker(current,'bos','belowBar','arrowDown');
+              if (structureInd.msb) marker(current,'msb','aboveBar','arrowDown');
+              if (bearChoch && structureInd.choch) marker(current,'choch','belowBar','circle');
+              addOrderBlock(n,'short'); brokenLow[lp.time]=true;
+            }
+            activeZones.forEach(function(z){
+              if (z.invalidated) return;
+              var invalid=z.type==='long'?current.c<z.low:current.c>z.high;
+              if (invalid) { z.invalidated=true; if (structureInd.breaker) marker(current,'breaker',z.type==='long'?'aboveBar':'belowBar','square'); }
+            });
+          }
+          return {markers:markers,zones:activeZones.filter(function(x){return !x.invalidated;})};
+        }
+
         function resetOverlays(){
           Object.keys(overlaySeries).forEach(function(k){ if (overlaySeries[k]) { try { chart.removeSeries(overlaySeries[k]); } catch(e){} overlaySeries[k] = null; }});
           overlayLines.forEach(function(l){ try { cs.removePriceLine(l); } catch(e){} });
@@ -841,11 +903,12 @@
         function computeBB(list, len, mult){ var outU = [], outM = [], outL = []; for (var i = 0; i < list.length; i++) { if (i + 1 < len) continue; var w = list.slice(i + 1 - len, i + 1).map(function(x){ return x.c; }), mean = w.reduce(function(a, b){ return a + b; }, 0) / len, sd = Math.sqrt(w.reduce(function(a, b){ return a + Math.pow(b - mean, 2); }, 0) / len); outM.push({time: list[i].t, value: mean}); outU.push({time: list[i].t, value: mean + mult * sd}); outL.push({time: list[i].t, value: mean - mult * sd}); } return {upper: outU, mid: outM, lower: outL}; }
         function computeProfile(list, bins){ var lo = Math.min.apply(null, list.map(function(x){ return x.l; })), hi = Math.max.apply(null, list.map(function(x){ return x.h; })), step = (hi - lo) / (bins || 48) || 1, arr = []; for (var i = 0; i < (bins || 48); i++) arr.push({price: lo + step * (i + .5), vol: 0}); list.forEach(function(x){ var idx = Math.max(0, Math.min(arr.length - 1, Math.floor(((x.h + x.l + x.c) / 3 - lo) / step))); arr[idx].vol += +(x.v || 0); }); var sorted = arr.slice().sort(function(a, b){ return b.vol - a.vol; }), poc = sorted[0] || {price: 0, vol: 0}, pocIndex = arr.findIndex(function(x){ return x === poc; }), total = arr.reduce(function(a, b){ return a + b.vol; }, 0), take = poc.vol, left = pocIndex - 1, right = pocIndex + 1, low = poc.price, high = poc.price; while (take < total * .70 && (left >= 0 || right < arr.length)) { var lv = left >= 0 ? arr[left].vol : -1, rv = right < arr.length ? arr[right].vol : -1; if (rv >= lv) { take += Math.max(0, rv); high = arr[right].price; right++; } else { take += Math.max(0, lv); low = arr[left].price; left--; } } return {poc: poc.price, hvn: sorted.slice(0, 3).map(function(x){ return x.price; }), lvn: arr.filter(function(x){ return x.vol > 0; }).sort(function(a, b){ return a.vol - b.vol; }).slice(0, 3).map(function(x){ return x.price; }), vah: high, val: low, total: total, bins: arr.length}; }
         function addLine(price, color, title, style){ if (!isFinite(price)) return; overlayLines.push(cs.createPriceLine({price: price, color: color, lineWidth: 1, lineStyle: style || LightweightCharts.LineStyle.Solid, axisLabelVisible: true, title: title})); }
-        function updateOverlays(list){ if (!chart || !cs) return; resetOverlays(); var rows = closedBars(list); if (rows.length < 3) return; if (ind.vwap) { overlaySeries.vwap = chart.addLineSeries({ color: IND_COLORS.vwap, lineWidth: 2, priceScaleId: 'right', lastValueVisible: true, title: 'VWAP ' + curTF }); overlaySeries.vwap.setData(computeVWAP(rows)); }
+        function updateOverlays(list, structureState){ if (!chart || !cs) return; resetOverlays(); var rows = closedBars(list); if (rows.length < 3) return; if (ind.vwap) { overlaySeries.vwap = chart.addLineSeries({ color: IND_COLORS.vwap, lineWidth: 2, priceScaleId: 'right', lastValueVisible: true, title: 'VWAP ' + curTF }); overlaySeries.vwap.setData(computeVWAP(rows)); }
           if (ind.bb && rows.length >= 20) { var bb = computeBB(rows, 20, 2); overlaySeries.bbU = chart.addLineSeries({ color: IND_COLORS.bb, lineWidth: 1, priceScaleId: 'right', lastValueVisible: false, title: 'BB upper' }); overlaySeries.bbM = chart.addLineSeries({ color: 'rgba(210,153,34,.55)', lineWidth: 1, priceScaleId: 'right', lastValueVisible: false, title: 'BB mid' }); overlaySeries.bbL = chart.addLineSeries({ color: IND_COLORS.bb, lineWidth: 1, priceScaleId: 'right', lastValueVisible: false, title: 'BB lower' }); overlaySeries.bbU.setData(bb.upper); overlaySeries.bbM.setData(bb.mid); overlaySeries.bbL.setData(bb.lower); }
-          var prof = computeProfile(rows, 48); if (ind.valueArea && prof.vah > prof.val) { overlaySeries.valueArea = chart.addAreaSeries({ topColor: 'rgba(88,166,255,.16)', bottomColor: 'rgba(88,166,255,.04)', lineColor: 'rgba(88,166,255,.32)', lineWidth: 1, priceScaleId: 'right', lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false, title: 'Value Area 70%' }); overlaySeries.valueArea.applyOptions({ baseValue: { type: 'price', price: prof.val } }); overlaySeries.valueArea.setData(rows.map(function(x){ return { time: x.t, value: prof.vah }; })); } if (ind.poc) addLine(prof.poc, IND_COLORS.poc, 'POC ' + curTF, LightweightCharts.LineStyle.Solid); if (ind.vah) addLine(prof.vah, IND_COLORS.vah, 'VAH ' + curTF, LightweightCharts.LineStyle.Dotted); if (ind.val) addLine(prof.val, IND_COLORS.val, 'VAL ' + curTF, LightweightCharts.LineStyle.Dotted); if (ind.hvn) (prof.hvn || []).forEach(function(p, i){ addLine(p, IND_COLORS.hvn, 'HVN ' + (i + 1), LightweightCharts.LineStyle.Dashed); }); if (ind.lvn) (prof.lvn || []).forEach(function(p, i){ addLine(p, IND_COLORS.lvn, 'LVN ' + (i + 1), LightweightCharts.LineStyle.Dashed); }); if (ind.volumeProfile || ind.marketProfile) { profileBox = document.createElement('div'); profileBox.className = 'profile-pill'; profileBox.innerHTML = '<b>' + esc(curTF) + ' Profile</b><br>POC <span style="color:' + IND_COLORS.poc + '">' + fmtNum(prof.poc, 2) + '</span> · VAH <span style="color:' + IND_COLORS.vah + '">' + fmtNum(prof.vah, 2) + '</span> · VAL <span style="color:' + IND_COLORS.val + '">' + fmtNum(prof.val, 2) + '</span><br>' + (ind.volumeProfile ? 'Volume Profile: ' + prof.bins + ' bins · quote volume<br>' : '') + (ind.marketProfile ? 'Market Profile: value area 70% from price-time/volume bins' : ''); document.getElementById('ct').appendChild(profileBox); }
+          var prof = computeProfile(rows, 48); if (ind.valueArea && prof.vah > prof.val) { overlaySeries.valueArea = chart.addAreaSeries({ topColor: 'rgba(88,166,255,.16)', bottomColor: 'rgba(88,166,255,.04)', lineColor: 'rgba(88,166,255,.32)', lineWidth: 1, priceScaleId: 'right', lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false, title: 'Value Area 70%' }); overlaySeries.valueArea.applyOptions({ baseValue: { type: 'price', price: prof.val } }); overlaySeries.valueArea.setData(rows.map(function(x){ return { time: x.t, value: prof.vah }; })); } if (ind.poc) addLine(prof.poc, IND_COLORS.poc, 'POC ' + curTF, LightweightCharts.LineStyle.Solid); if (ind.vah) addLine(prof.vah, IND_COLORS.vah, 'VAH ' + curTF, LightweightCharts.LineStyle.Dotted); if (ind.val) addLine(prof.val, IND_COLORS.val, 'VAL ' + curTF, LightweightCharts.LineStyle.Dotted); if (ind.hvn) (prof.hvn || []).forEach(function(p, i){ addLine(p, IND_COLORS.hvn, 'HVN ' + (i + 1), LightweightCharts.LineStyle.Dashed); }); if (ind.lvn) (prof.lvn || []).forEach(function(p, i){ addLine(p, IND_COLORS.lvn, 'LVN ' + (i + 1), LightweightCharts.LineStyle.Dashed); }); var structure = structureState || marketStructureMarkers(rows); (structure.zones || []).forEach(function(z){ if (structureInd[z.key]) addLine(z.price, STRUCTURE_COLORS[z.key], STRUCTURE_LABELS[z.key], LightweightCharts.LineStyle.Dashed); }); if (ind.volumeProfile || ind.marketProfile) { profileBox = document.createElement('div'); profileBox.className = 'profile-pill'; profileBox.innerHTML = '<b>' + esc(curTF) + ' Profile</b><br>POC <span style="color:' + IND_COLORS.poc + '">' + fmtNum(prof.poc, 2) + '</span> · VAH <span style="color:' + IND_COLORS.vah + '">' + fmtNum(prof.vah, 2) + '</span> · VAL <span style="color:' + IND_COLORS.val + '">' + fmtNum(prof.val, 2) + '</span><br>' + (ind.volumeProfile ? 'Volume Profile: ' + prof.bins + ' bins · quote volume<br>' : '') + (ind.marketProfile ? 'Market Profile: value area 70% from price-time/volume bins' : ''); document.getElementById('ct').appendChild(profileBox); }
         }
         function toggleInd(k){ ind[k]=!ind[k]; updBar(); if (curData.length) updateOverlays(curData); }
+        function toggleStructure(k){ structureInd[k]=!structureInd[k]; updBar(); if (curData.length) setSeries(curData, curTF); }
         function ema(prev, val, len){ var a = 2 / (len + 1); return prev == null ? val : (prev + a * (val - prev)); }
         function rma(prev, val, len){ return prev == null ? val : (((prev * (len - 1)) + val) / len); }
         function clamp(x, lo, hi){ return Math.max(lo, Math.min(hi, x)); }
@@ -855,9 +918,16 @@
         function wsKlineToBar(k){ k = k && k.data ? k.data.k : (k && k.k ? k.k : k); var tq = +k.q, bq = +k.Q, sq = Math.max(0, tq - bq); return { t: +(k.t) / 1000, o: +k.o, h: +k.h, l: +k.l, c: +k.c, v: tq, bv: bq, sv: sq, volume_unit: VOLUME_UNIT, closed: !!k.x }; }
         function visibleBars(tf){ return {'1s': 120, '1m': 180, '5m': 180, '15m': 160, '30m': 140, '1h': 120, '4h': 100, '1D': 120, '3D': 90}[tf] || 120; }
         function isAtRightEdge(len){ var r = chart.timeScale().getVisibleLogicalRange(); return !r || r.to >= len - 3; }
-        function applyViewport(tf, len, force){ if (!len) return; if (!force && !followLive) return; var bars = Math.min(visibleBars(tf), len); chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, len - bars) - 1, to: len + 5 }); }
-        function goLive(){ followLive = true; userScrolled = false; applyViewport(curTF, curData.length, true); document.getElementById('liveBtn').style.opacity = '1'; }
-        function trackViewport(){ chart.timeScale().subscribeVisibleLogicalRangeChange(function(r){ if (!r || !curData.length) return; followLive = r.to >= curData.length - 3; document.getElementById('liveBtn').style.opacity = followLive ? '1' : '0.55'; }); }
+        function applyViewport(tf, len, force){ if (!len) return; if (!force && (!followLive || viewportLock)) return; var bars = Math.min(visibleBars(tf), len); chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, len - bars) - 1, to: len + 5 }); }
+        function goLive(){ viewportLock = false; followLive = true; userScrolled = false; applyViewport(curTF, curData.length, true); document.getElementById('liveBtn').style.opacity = '1'; }
+        function trackViewport(){ chart.timeScale().subscribeVisibleLogicalRangeChange(function(r){ if (!r || !curData.length) return; if (!viewportLock) followLive = r.to >= curData.length - 3; document.getElementById('liveBtn').style.opacity = followLive && !viewportLock ? '1' : '0.55'; }); }
+        function trackManualViewport(){
+          var el=document.getElementById('ct'); if (!el) return;
+          el.addEventListener('pointerdown',function(e){ viewportPointer={x:e.clientX,y:e.clientY}; });
+          el.addEventListener('pointermove',function(e){ if (!viewportPointer) return; if (Math.abs(e.clientX-viewportPointer.x)>4 || Math.abs(e.clientY-viewportPointer.y)>4) { viewportLock=true; followLive=false; userScrolled=true; document.getElementById('liveBtn').style.opacity='0.55'; viewportPointer=null; } });
+          ['pointerup','pointercancel','pointerleave'].forEach(function(type){ el.addEventListener(type,function(){ viewportPointer=null; }); });
+          el.addEventListener('wheel',function(e){ if (Math.abs(e.deltaX)>0 || e.shiftKey) { viewportLock=true; followLive=false; userScrolled=true; document.getElementById('liveBtn').style.opacity='0.55'; } },{passive:true});
+        }
         function tfText(tf){ return {'1s': '5 seconds', '1m': '5 minutes', '5m': '25 minutes', '15m': '75 minutes', '30m': '150 minutes', '1h': '5 hours', '4h': '20 hours', '1D': '5 days', '3D': '15 days'}[tf] || 'selected TF × 5'; }
         function init(){
           chart = LightweightCharts.createChart(document.getElementById('ct'), {
@@ -879,6 +949,7 @@
           chart.priceScale('nai').applyOptions({ scaleMargins: { top: 0.88, bottom: 0.01 }, visible: true });
           chart.subscribeCrosshairMove(onCrosshair);
           trackViewport();
+          trackManualViewport();
         }
         function calcNAI(list){
           var volumeEMA = null, atr14 = null, atrBaseline = null, buyLine = null, sellLine = null, out = [], candidates = [], initiativeEpisode = null, buyWasStrong = false, sellWasStrong = false, buyPeak = null, sellPeak = null, buyPeakHigh = null, sellPeakLow = null, buyWin = [], sellWin = [], buyEpisode = 0, sellEpisode = 0;
@@ -965,17 +1036,18 @@
            * this snapshot, setData() can re-anchor the chart at the newest bar
            * after a left drag. */
           var preservedRange = chart ? chart.timeScale().getVisibleLogicalRange() : null;
-          var wasFollowingLive = followLive;
+          var wasFollowingLive = followLive && !viewportLock;
           list = calcNAI(list);
           curData = list;
           cs.setData(list.map(function(x){ return {time: x.t, open: x.o, high: x.h, low: x.l, close: x.c}; }));
-          var markers = naiMarkers(list);
+          var structureState = marketStructureMarkers(list);
+          var markers = naiMarkers(list).concat(structureState.markers || []);
           cs.setMarkers(markers);
           vs.setData(pan.vol ? list.map(function(x){ return {time: x.t, value: x.v || 0, color: x.closed ? 'rgba(38,166,154,0.3)' : 'rgba(242,204,96,0.25)'}; }) : []);
           ds.setData(pan.del ? list.map(function(x){ var d = x.delta != null ? x.delta : ((x.bv || 0) - (x.sv || 0)); return {time: x.t, value: Math.abs(d), color: x.closed ? (d >= 0 ? 'rgba(38,166,154,0.3)' : 'rgba(239,83,80,0.3)') : 'rgba(242,204,96,0.25)'}; }) : []);
           bs.setData(pan.nai ? list.map(function(x){ return {time: x.t, value: x.naiBuy || 0, color: x.closed ? '#3fb950' : 'rgba(63,185,80,0.35)'}; }) : []);
           ss.setData(pan.nai ? list.map(function(x){ return {time: x.t, value: x.naiSell || 0, color: x.closed ? '#f85149' : 'rgba(248,81,73,0.35)'}; }) : []);
-          updateOverlays(list);
+          updateOverlays(list, structureState);
           resizeC();
           if (wasFollowingLive) applyViewport(tf || curTF, list.length, false);
           else if (preservedRange) {
@@ -999,7 +1071,7 @@
         function attach1mAbsorptionSummary(rows){ return fetch('data/bars_1s.json?ts='+Date.now()).then(function(r){ return r.ok ? r.json() : []; }).then(function(one){ archiveCollectorTail('local_absorption_seed_1s','1s',one.map(normalizeBar),1200); var calc=calcNAI(one), m={}; calc.forEach(function(x){ if(!x.closed)return; var key=Math.floor(x.t/60)*60; (x.naiEvents||[]).forEach(function(e){ var base=e.split(' ')[0]; if(base==='BA'||base==='SA'){m[key]=m[key]||{ba:0,sa:0};if(base==='BA')m[key].ba++; else m[key].sa++;}});}); rows.forEach(function(r){ var z=m[Math.floor(r.t/60)*60]; if(z){r.nai1sBASeconds=z.ba||0;r.nai1sSASeconds=z.sa||0;} }); return rows; }).catch(function(){ return rows; }); }
         function loadTF(tf, fromHistory){ try { console.log('LOADTF START', tf, loadSeq, Date.now()); curTF = tf || curTF || '1D'; tf = curTF; var seq = ++loadSeq; console.log('LOADTF SEQ', seq, tf, Date.now()); localStorage.setItem('nceCurrentTF', curTF); try { var tfUrl = new URL(window.location.href); tfUrl.searchParams.set('tf', curTF); var currentPanel = panelFromUrl(); if (currentPanel) tfUrl.searchParams.set('panel', currentPanel); if (fromHistory) window.history.replaceState({panel: currentPanel || 'Grafik', tf: curTF}, '', tfUrl.toString()); else if (tfFromUrl() !== curTF) window.history.pushState({panel: currentPanel || 'Grafik', tf: curTF}, '', tfUrl.toString()); } catch (urlError) {} document.querySelectorAll('#tf button').forEach(function(b){ b.classList.toggle('on', b.textContent === curTF); }); var mpEl = document.getElementById('mp'); if (mpEl) mpEl.innerHTML = '<b>' + tfText(curTF) + '</b>'; syncInstantPrice(); closeSockets(); lastWsUrl = null; wsState = ENABLE_LIVE ? 'START' : 'STATIC'; setWsLabel(); function still(){ return seq === loadSeq && curTF === tf; } function refreshActivePanel(){ var active = panelFromUrl(); if (still() && active) setTab(active); } if (tf === '1s') { load1s(seq); refreshActivePanel(); return; } if (tf === '1m') { loadLocalBars(tf).then(function(){ if (!still()) return; return attach1mAbsorptionSummary(curData).then(function(rows){ if (still()) renderData(rows); }); }).finally(function(){ if (!still()) return; return loadFromBinance(tf).catch(function(e){ console.warn(e.message); }); }).finally(function(){ if (still()) { openKlineSocket(tf); refreshActivePanel(); } }); return; } loadLocalBars(tf).finally(function(){ if (!still()) return; return loadFromBinance(tf).catch(function(e){ console.warn(e.message); }); }).finally(function(){ if (still()) { openKlineSocket(tf); refreshActivePanel(); } }); } catch(e) { console.error('loadTF error', e); } }
         function add1sTrade(ms, p, qty, buy){ var t = Math.floor(ms / 1000), quote = p * qty; if (!oneSecondBars[t]) oneSecondBars[t] = {t: t, o: p, h: p, l: p, c: p, v: 0, bv: 0, sv: 0, volume_unit: VOLUME_UNIT, closed: false}; var c = oneSecondBars[t]; c.h = Math.max(c.h, p); c.l = Math.min(c.l, p); c.c = p; c.v += quote; if (buy) c.bv += quote; else c.sv += quote; Object.keys(oneSecondBars).forEach(function(k){ oneSecondBars[k].closed = (+k) < t; if (+k < t - 86400) delete oneSecondBars[k]; }); }
-        function load1s(seq){ curData = []; oneSecondBars = {}; renderData([]); loadLocalBars('1s').then(function(){ if (seq !== loadSeq || curTF !== '1s') return; curData.forEach(function(x){ oneSecondBars[x.t] = x; }); }).finally(function(){ if (seq === loadSeq && curTF === '1s' && ENABLE_LIVE) open1sSocket(); }); }
+        function load1s(seq){ curData = []; oneSecondBars = {}; renderData([]); loadLocalBars('1s').then(function(){ if (seq !== loadSeq || curTF !== '1s') return; curData.forEach(function(x){ oneSecondBars[x.t] = x; }); }).finally(function(){ if (seq === loadSeq && curTF === '1s' && ENABLE_LIVE) open1sSocket(); if (seq === loadSeq && curTF === '1s') { var active=panelFromUrl(); if (active) setTab(active,true); } }); }
         function flush1s(){ var list = Object.values(oneSecondBars).sort(function(a, b){ return a.t - b.t; }); if (!list.length) return; setSeries(list, '1s'); showPrice(curData); showStats('1s', curData); var maxClosed = Math.floor(nowServerMs() / 1000) - 1; var closed = list.filter(function(x){ return x.t <= maxClosed && x.t > (collectorArchiveState.oneSecLastT || 0); }); if (closed.length) { collectorArchiveState.oneSecLastT = closed[closed.length - 1].t; archiveCollectorTail('binance_ws_aggtrade_1s', '1s', closed, 300); } }
         function open1sSocket(){ lastWsUrl = WS_AGG; wsState = 'CONNECTING'; setWsLabel(); ws1s = new WebSocket(WS_AGG); ws1s.onopen = function(){ reconnectDelay['1s'] = 1000; wsState = 'OPEN'; setWsLabel(); }; ws1s.onmessage = function(e){ try { var d = JSON.parse(e.data); d = d && d.data ? d.data : d; var p = +d.p, q = +d.q, buy = !d.m; archiveCollector('binance_ws_aggtrade_raw', 'aggTrade', [{t: Math.floor((+d.T || Date.now()) / 1000), price: p, qty: q, buyer_is_maker: !!d.m}]); add1sTrade(+d.T, p, q, buy); flush1s(); } catch(e2) { console.error('agg ws parse', e2); } }; ws1s.onclose = function(){ if (curTF === '1s' && ENABLE_LIVE) { wsState = 'RECONNECT'; setWsLabel(); var delay = reconnectDelay['1s'] || 1000; reconnectDelay['1s'] = Math.min(delay * 2, 30000); reconnectTimers['1s'] = setTimeout(open1sSocket, delay); } }; }
         function syncInstantPrice(){ return marketGet('/api/v1/market/bookticker?symbol=BTCUSDT', BIN + BIN_PATH + '/ticker/bookTicker?symbol=BTCUSDT').then(function(j){ var bid = +(j.bidPrice || j.bid), ask = +(j.askPrice || j.ask), mid = +(j.mid || ((bid + ask) / 2)); if (isFinite(mid) && mid > 0) { updateHeaderPrice(mid, headerPrice != null ? headerPrice : mid); archiveCollector('binance_bookticker_price', 'bookTicker', [{t: Math.floor(Date.now() / 1000), bid: bid, ask: ask, mid: mid, source: j.source || 'binance_direct'}]); } return j; }).catch(function(e){ console.warn('instant price fallback', e && e.message || e); return null; }); }
@@ -1012,6 +1084,13 @@
         function refreshPanels(){ resizeC(); if (curData.length) setSeries(curData, curTF); }
         function closePanel(p){ pan[p] = false; document.getElementById(p === 'vol' ? 'vl' : (p === 'del' ? 'dl' : 'nl')).style.display = 'none'; updBar(); refreshPanels(); }
         function updBar(){ var bar = document.getElementById('panel-bar'); bar.innerHTML = ''; ['vol', 'del', 'nai'].forEach(function(p){ if (!pan[p]) { var b = document.createElement('button'); b.textContent = '+ ' + p.toUpperCase(); b.onclick = function(){ pan[p] = true; document.getElementById(p === 'vol' ? 'vl' : (p === 'del' ? 'dl' : 'nl')).style.display = 'flex'; updBar(); refreshPanels(); }; bar.appendChild(b); } }); var sep = document.createElement('span'); sep.className = 'sep'; sep.textContent = 'Indicators ' + curTF + ':'; bar.appendChild(sep); ['vwap', 'poc', 'hvn', 'lvn', 'valueArea', 'vah', 'val', 'bb', 'volumeProfile', 'marketProfile'].forEach(function(k){ var b = document.createElement('button'); b.textContent = (ind[k] ? '✓ ' : '+ ') + k.toUpperCase(); b.style.borderColor = ind[k] ? (IND_COLORS[k] || '#388bfd') : '#30363d'; b.style.color = ind[k] ? (IND_COLORS[k] || '#c9d1d9') : '#8b949e'; b.onclick = function(){ toggleInd(k); }; bar.appendChild(b); }); }
+        var renderBasePanelBar = updBar;
+        updBar = function(){
+          renderBasePanelBar();
+          var bar=document.getElementById('panel-bar'); if (!bar) return;
+          var sep=document.createElement('span'); sep.className='sep'; sep.textContent='Structure '+curTF+':'; bar.appendChild(sep);
+          Object.keys(STRUCTURE_LABELS).forEach(function(k){ var b=document.createElement('button'); b.textContent=(structureInd[k]?'✓ ':'+')+STRUCTURE_LABELS[k]; b.style.borderColor=structureInd[k]?(STRUCTURE_COLORS[k]||'#388bfd'):'#30363d'; b.style.color=structureInd[k]?(STRUCTURE_COLORS[k]||'#c9d1d9'):'#8b949e'; b.onclick=function(){toggleStructure(k);}; bar.appendChild(b); });
+        };
         (function(){ var tb = document.getElementById('tf'); if (!tb) return; TFs.forEach(function(t){ var b = document.createElement('button'); b.textContent = t; b.onclick = function(){ tb.querySelectorAll('button').forEach(function(x){ x.classList.remove('on'); }); b.classList.add('on'); loadTF(t, false); }; if (t === curTF) b.classList.add('on'); tb.appendChild(b); }); })();
         syncInstantPrice(); setInterval(syncInstantPrice, 3000); setInterval(pollLatestKline, 5000);
         if (ENABLE_LIVE) {
