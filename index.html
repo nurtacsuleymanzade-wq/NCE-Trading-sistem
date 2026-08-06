@@ -121,6 +121,28 @@
         .umpe-layer-box pre { margin: 0; font-size: 0.9em; color: #8b949e; white-space: pre-wrap; }
         .umpe-refresh { background-color: #238636; border: 1px solid #2ea043; color: white; padding: 6px 14px; border-radius: 5px; cursor: pointer; font-size: 0.8em; }
         .umpe-refresh:hover { background-color: #2ea043; }
+        .decision-engine { display:flex; flex-direction:column; gap:14px; }
+        .decision-summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; }
+        .decision-card { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:14px; }
+        .decision-card h3 { margin:0 0 8px; color:#8b949e; font-size:.82rem; text-transform:uppercase; letter-spacing:.04em; }
+        .decision-card .decision-number { font-size:1.8rem; font-weight:800; }
+        .decision-long { color:#3fb950; }
+        .decision-short { color:#f85149; }
+        .decision-neutral { color:#f2cc60; }
+        .decision-target { color:#58a6ff; font-size:1.25rem; font-weight:800; }
+        .decision-table { width:100%; border-collapse:collapse; font-size:.86rem; }
+        .decision-table th,.decision-table td { padding:8px 7px; border-bottom:1px solid #30363d; text-align:left; vertical-align:top; }
+        .decision-table th { color:#8b949e; font-weight:600; }
+        .decision-table td:nth-child(2),.decision-table td:nth-child(3) { text-align:center; white-space:nowrap; font-weight:800; }
+        .decision-table .decision-detail { color:#8b949e; font-weight:400; }
+        .decision-meter { height:8px; border-radius:5px; overflow:hidden; background:#30363d; display:flex; margin-top:8px; }
+        .decision-meter-long { background:#3fb950; }
+        .decision-meter-short { background:#f85149; }
+        .decision-meter-neutral { background:#8b949e; }
+        .decision-meta { color:#8b949e; font-size:.8rem; }
+        .decision-refresh { background:#238636; border:1px solid #2ea043; color:#fff; padding:7px 12px; border-radius:5px; cursor:pointer; }
+        .decision-refresh:hover { background:#2ea043; }
+        @media (max-width:600px) { .decision-table { font-size:.78rem; } .decision-table th,.decision-table td { padding:6px 4px; } }
         #hovaHistory { margin-top: 10px; }
         #hovaHistory ul { list-style: none; padding-left: 0; max-height: 150px; overflow-y: auto; border: 1px solid #30363d; border-radius: 5px; padding: 8px; background-color: #161b22;}
         #hovaHistory li { margin-bottom: 5px; font-size: 0.85em; }
@@ -214,7 +236,7 @@
                 .then(function(r){ if(r.ok) { console.log('MARKETGET fallback ok', fallbackUrl, Date.now()); return r.json(); } throw Error('status ' + r.status); });
             });
         }
-        var activePanelRequestSeq = 0, activePanelName = '';
+        var activePanelRequestSeq = 0, activePanelName = '', decisionRefreshTimer = null;
         function requestJson(url, options) {
           options = options || {};
           var full = (url.indexOf('http') === 0) ? url : API_BASE + url;
@@ -459,6 +481,145 @@
           });
         }
 
+        /* ====== Real-time Long/Short decision engine ======
+         * This panel deliberately reads public market feeds directly. It does
+         * not turn missing data into a fabricated score.
+         */
+        const SCORE_FAPI = 'https://fapi.binance.com/fapi/v1';
+        const SCORE_FDATA = 'https://fapi.binance.com/futures/data';
+        const SCORE_DERIBIT = 'https://www.deribit.com/api/v2/public';
+        function scoreFetchJson(url) {
+          return fetch(url, { signal: AbortSignal.timeout(9000) }).then(function(r) {
+            return r.text().then(function(raw) {
+              var body = null; try { body = raw ? JSON.parse(raw) : null; } catch (e) {}
+              if (!r.ok) throw Error('HTTP ' + r.status + ' · ' + url);
+              if (body == null) throw Error('Invalid JSON · ' + url);
+              return body;
+            });
+          });
+        }
+        function scoreOptional(url) {
+          return scoreFetchJson(url).catch(function(e) { return { __error: e.message || String(e) }; });
+        }
+        function scoreInterval(tf) { return {'1s':'1m','1m':'1m','5m':'5m','15m':'15m','30m':'30m','1h':'1h','4h':'4h','1D':'1d','3D':'3d'}[tf] || '1m'; }
+        function scoreBars(rows) {
+          return (rows || []).filter(function(x) { return Array.isArray(x) && +x[6] < Date.now() && +x[1] > 0; }).map(function(x) {
+            var v = +x[7] || 0, bv = +x[10] || 0;
+            return { t:+x[0]/1000, o:+x[1], h:+x[2], l:+x[3], c:+x[4], v:v, bv:bv, sv:Math.max(0,v-bv), delta:bv-Math.max(0,v-bv), closed:true };
+          });
+        }
+        function scoreEma(values, len) {
+          if (!values.length) return [];
+          var a = 2 / (len + 1), out = [values[0]];
+          for (var i=1;i<values.length;i++) out.push(values[i] * a + out[i-1] * (1-a));
+          return out;
+        }
+        function scoreRsi(values, len) {
+          var out = new Array(values.length).fill(null), gain = 0, loss = 0;
+          if (values.length <= len) return out;
+          for (var i=1;i<=len;i++) { var d=values[i]-values[i-1]; gain += Math.max(0,d); loss += Math.max(0,-d); }
+          gain /= len; loss /= len; out[len] = loss === 0 ? 100 : 100 - 100/(1 + gain/loss);
+          for (var j=len+1;j<values.length;j++) { var ch=values[j]-values[j-1]; gain=(gain*(len-1)+Math.max(0,ch))/len; loss=(loss*(len-1)+Math.max(0,-ch))/len; out[j]=loss===0?100:100-100/(1+gain/loss); }
+          return out;
+        }
+        function scoreStructure(rows) {
+          var highs=[], lows=[], left=2, right=2;
+          for (var i=left;i<rows.length-right;i++) {
+            var high=true, low=true;
+            for (var j=1;j<=left;j++) { high=high&&rows[i].h>=rows[i-j].h; low=low&&rows[i].l<=rows[i-j].l; }
+            for (var k=1;k<=right;k++) { high=high&&rows[i].h>rows[i+k].h; low=low&&rows[i].l<rows[i+k].l; }
+            if (high) highs.push({price:rows[i].h,time:rows[i].t});
+            if (low) lows.push({price:rows[i].l,time:rows[i].t});
+          }
+          var hhhl = highs.length>=2 && lows.length>=2 && highs[highs.length-1].price>highs[highs.length-2].price && lows[lows.length-1].price>lows[lows.length-2].price;
+          var lhll = highs.length>=2 && lows.length>=2 && highs[highs.length-1].price<highs[highs.length-2].price && lows[lows.length-1].price<lows[lows.length-2].price;
+          var last=rows[rows.length-1], lastHigh=highs[highs.length-1], lastLow=lows[lows.length-1], priorHigh=highs[highs.length-2], priorLow=lows[lows.length-2];
+          var bos = lastHigh && last.c>lastHigh.price ? 'long' : (lastLow && last.c<lastLow.price ? 'short' : null);
+          var priorTrend = priorHigh && priorLow && highs.length>=3 && lows.length>=3 && highs[highs.length-2].price>highs[highs.length-3].price && lows[lows.length-2].price>lows[lows.length-3].price ? 'long' : (highs.length>=3 && lows.length>=3 && highs[highs.length-2].price<highs[highs.length-3].price && lows[lows.length-2].price<lows[lows.length-3].price ? 'short' : null);
+          var choch = bos && priorTrend && bos!==priorTrend ? bos : null;
+          return { bias:hhhl?'long':(lhll?'short':null), label:hhhl?'HH-HL':(lhll?'LH-LL':'mixed/insufficient'), bos:bos, choch:choch, highs:highs, lows:lows };
+        }
+        function scoreCriterion(label, bias, detail, source, available) {
+          var valid = available !== false;
+          return { label:label, bias:bias||'neutral', long:bias==='long'?1:0, short:bias==='short'?1:0, detail:detail||'', source:source||'', available:valid };
+        }
+        function scoreSideFromDelta(value, epsilon) { return value > (epsilon||0) ? 'long' : (value < -(epsilon||0) ? 'short' : null); }
+        function scoreMaxPain(summary) {
+          var rows = summary && summary.result;
+          if (!Array.isArray(rows) || !rows.length) return null;
+          var months={JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
+          var options = rows.map(function(x) { var p=String(x.instrument_name||'').split('-'), expiry=String(p[1]||'').match(/^(\d{1,2})([A-Z]{3})(\d{2})$/), expiryMs=expiry&&months[expiry[2]]!=null?Date.UTC(2000+ +expiry[3],months[expiry[2]],+expiry[1]):NaN, strike=+p[2], type=p[3], oi=+x.open_interest||0; return {strike:strike,type:type,oi:oi,expiry:expiryMs}; }).filter(function(x){return isFinite(x.strike)&&x.oi>0&&(x.type==='C'||x.type==='P')&&isFinite(x.expiry);});
+          var future=options.filter(function(x){return x.expiry>=Date.now()-86400000;}), nearest=future.length?Math.min.apply(null,future.map(function(x){return x.expiry;})):NaN;
+          if (isFinite(nearest)) options=options.filter(function(x){return x.expiry===nearest;});
+          var strikes = Array.from(new Set(options.map(function(x){return x.strike;}))).sort(function(a,b){return a-b;});
+          if (!options.length || !strikes.length) return null;
+          var best=null;
+          strikes.forEach(function(settle){ var pain=options.reduce(function(n,x){ return n + x.oi * (x.type==='C' ? Math.max(0,x.strike-settle) : Math.max(0,settle-x.strike)); },0); if (!best || pain<best.pain) best={price:settle,pain:pain,contracts:options.length,expiry:nearest}; });
+          return best;
+        }
+        function scoreTarget(profile, price, direction) {
+          if (!profile || !isFinite(price) || !direction) return null;
+          var levels=[];
+          function add(label,value,priority){ if (isFinite(value)) levels.push({label:label,price:+value,priority:priority||9}); }
+          add('VAH',profile.vah,1); add('VAL',profile.val,1); add('POC',profile.poc,2);
+          (profile.hvn||[]).forEach(function(x,i){add('HVN '+(i+1),x,3);});
+          (profile.lvn||[]).forEach(function(x,i){add('LVN '+(i+1),x,4);});
+          var usable=levels.filter(function(x){return direction==='long'?x.price>price:x.price<price;}).sort(function(a,b){return direction==='long'?(a.price-b.price||a.priority-b.priority):(b.price-a.price||a.priority-b.priority);});
+          return usable[0] || null;
+        }
+        function fetchRealDecision(tf) {
+          var intv=scoreInterval(tf), base=SCORE_FAPI, dataBase=SCORE_FDATA, symbol=SYMBOL;
+          var klineUrl=base+'/klines?symbol='+symbol+'&interval='+intv+'&limit=320';
+          return Promise.all([
+            scoreFetchJson(klineUrl),
+            scoreFetchJson(base+'/ticker/price?symbol='+symbol),
+            scoreOptional(base+'/fundingRate?symbol='+symbol+'&limit=10'),
+            scoreOptional(base+'/openInterest?symbol='+symbol),
+            scoreOptional(dataBase+'/openInterestHist?symbol='+symbol+'&period=5m&limit=30'),
+            scoreOptional(base+'/aggTrades?symbol='+symbol+'&limit=1000'),
+            scoreOptional(SCORE_DERIBIT+'/get_book_summary_by_currency?currency=BTC&kind=option')
+          ]).then(function(a) {
+            var rows=scoreBars(a[0]), ticker=a[1]||{}, price=+ticker.price || (rows.length?rows[rows.length-1].c:NaN);
+            if (rows.length<60 || !isFinite(price)) throw Error('Binance Futures candle verisi yetersiz.');
+            var closes=rows.map(function(x){return x.c;}), profile=computeProfile(rows,48), structure=scoreStructure(rows), criteria=[], missing=[];
+            function add(c){criteria.push(c);}
+            add(scoreCriterion('Piyasa yapısı · HH-HL / LH-LL',structure.bias,structure.label,'Binance Futures klines'));
+            add(scoreCriterion('BOS',structure.bos,structure.bos?('BOS '+(structure.bos==='long'?'yukarı':'aşağı')):'Kırılım yok / bekleniyor','Binance Futures klines'));
+            add(scoreCriterion('CHoCH',structure.choch,structure.choch?('CHoCH '+(structure.choch==='long'?'bullish':'bearish')):'CHoCH teyidi yok','Binance Futures klines'));
+            var recent=rows.slice(-12), delta=recent.reduce(function(n,x){return n+x.delta;},0), deltaBias=scoreSideFromDelta(delta,0);
+            add(scoreCriterion('Delta',deltaBias,deltaBias?('Delta '+(deltaBias==='long'?'pozitif':'negatif')):'Delta nötr','Binance Futures taker-buy quote volume'));
+            var trades=Array.isArray(a[5])?a[5]:[], buyAgg=0,sellAgg=0;
+            trades.forEach(function(x){var q=(+x.p||0)*(+x.q||0); if (x.m) sellAgg+=q; else buyAgg+=q;});
+            var aggAvailable=trades.length>0, aggBias=buyAgg>sellAgg?'long':(sellAgg>buyAgg?'short':null);
+            if (!aggAvailable) missing.push('AggTrade');
+            add(scoreCriterion('Aggressive buy / sell',aggBias,aggAvailable?('Buy $'+fmtNum(buyAgg,0)+' · Sell $'+fmtNum(sellAgg,0)):'AggTrade API unavailable','Binance Futures aggTrades',aggAvailable));
+            var fundingRows=Array.isArray(a[2])?a[2]:[], funding=fundingRows.length?+fundingRows[fundingRows.length-1].fundingRate:NaN, fundingBias=isFinite(funding)&&(funding< -0.0005?'long':(funding>0?'short':null));
+            if (!isFinite(funding)) missing.push('Funding');
+            add(scoreCriterion('Funding',fundingBias,isFinite(funding)?(funding*100).toFixed(4)+'% · '+(fundingBias==='long'?'aşırı negatif':'pozitif/nötr'):'Funding API unavailable','Binance Futures fundingRate',isFinite(funding)));
+            var oiRows=Array.isArray(a[4])?a[4]:[], oiCurrent=a[3]&&!a[3].__error?+a[3].openInterest:NaN, oiSeries=oiRows.map(function(x){return +x.sumOpenInterestValue||+x.sumOpenInterest||+x.openInterest;}).filter(isFinite), oiDelta=oiSeries.length>=2?oiSeries[oiSeries.length-1]-oiSeries[Math.max(0,oiSeries.length-6)]:NaN, oiBias=scoreSideFromDelta(oiDelta,0);
+            if (!isFinite(oiDelta)) missing.push('OI trend');
+            add(scoreCriterion('Open Interest · yükseliş/düşüş',oiBias,isFinite(oiDelta)?(oiDelta>=0?'+':'')+fmtNum(oiDelta,2):'OI history API unavailable','Binance Futures openInterestHist',isFinite(oiDelta)));
+            var priceDelta=closes[closes.length-1]-closes[Math.max(0,closes.length-6)], priceOiBias=oiBias==='long'&&priceDelta>0?'long':(oiBias==='long'&&priceDelta<0?'short':null);
+            add(scoreCriterion('Price + OI birlikte',priceOiBias,priceOiBias==='long'?'Price ↑ + OI ↑':(priceOiBias==='short'?'Price ↓ + OI ↑':'Uyumlu birleşik sinyal yok'),'Binance Futures klines + OI',isFinite(oiDelta)));
+            var macdFast=scoreEma(closes,12), macdSlow=scoreEma(closes,26), macd=macdFast.map(function(x,i){return x-macdSlow[i];}), signal=scoreEma(macd,9), hist=macd.map(function(x,i){return x-signal[i];}), macdRise=scoreSideFromDelta(hist[hist.length-1]-hist[hist.length-2],0), macdBull=macd[macd.length-1]>signal[signal.length-1]?'long':(macd[macd.length-1]<signal[signal.length-1]?'short':null);
+            add(scoreCriterion('MACD · yükseliyor/düşüyor',macdRise,macdRise?('Histogram '+(macdRise==='long'?'yükseliyor':'düşüyor')):'Histogram yatay','Binance Futures klines'));
+            add(scoreCriterion('MACD · bullish/bearish',macdBull,macdBull?('MACD '+(macdBull==='long'?'bullish':'bearish')):'MACD nötr','Binance Futures klines'));
+            var rsi=scoreRsi(closes,14), rsiNow=rsi[rsi.length-1], rsiPrev=rsi[rsi.length-2], rsiBias=isFinite(rsiNow)&&isFinite(rsiPrev)?scoreSideFromDelta(rsiNow-rsiPrev,0):null;
+            add(scoreCriterion('RSI · yükseliyor/düşüyor',rsiBias,isFinite(rsiNow)?'RSI '+fmtNum(rsiNow,2):'RSI hesaplanamadı','Binance Futures klines',isFinite(rsiNow)&&isFinite(rsiPrev)));
+            var maxPain=scoreMaxPain(a[6]), maxPainBias=maxPain?(price<maxPain.price?'long':(price>maxPain.price?'short':null)):null;
+            if (!maxPain) missing.push('Max pain');
+            add(scoreCriterion('Max pain konumu',maxPainBias,maxPain?'$'+fmtNum(maxPain.price,2)+' · fiyat '+(price<maxPain.price?'altında':'üstünde'):'Deribit option OI unavailable','Deribit BTC options OI',!!maxPain));
+            var totals=criteria.filter(function(x){return x.available;}), longScore=totals.reduce(function(n,x){return n+x.long;},0), shortScore=totals.reduce(function(n,x){return n+x.short;},0), available=totals.length, neutral=Math.max(0,available-longScore-shortScore), direction=longScore>shortScore?'LONG':(shortScore>longScore?'SHORT':'WAIT'), longPct=available?longScore/available*100:0, shortPct=available?shortScore/available*100:0, directionalTotal=longScore+shortScore, longShare=directionalTotal?longScore/directionalTotal*100:50, shortShare=directionalTotal?shortScore/directionalTotal*100:50, target=scoreTarget(profile,price,direction==='LONG'?'long':(direction==='SHORT'?'short':null));
+            return {status:missing.length?'PARTIAL PASS':'PASS',time_utc:new Date().toISOString(),symbol:symbol,timeframe:tf,source:'Binance Futures REST + Deribit public options API',data_status:missing.length?'PARTIAL':'LIVE',price:price,direction:direction,criteria:criteria,long_score:longScore,short_score:shortScore,available_criteria:available,probability:{long:longPct,short:shortPct,neutral:available?neutral/available*100:100,long_share:longShare,short_share:shortShare},profile:{poc:profile.poc,vah:profile.vah,val:profile.val,hvn:profile.hvn,lvn:profile.lvn,bins:profile.bins},target:target,indicators:{funding_rate:funding,open_interest:oiCurrent,open_interest_delta:oiDelta,delta:delta,aggressive_buy:buyAgg,aggressive_sell:sellAgg,rsi:rsiNow,macd:macd[macd.length-1],macd_signal:signal[signal.length-1],max_pain:maxPain},missing:missing,warning:missing.length?'Bazı opsiyonel gerçek veri uçları cevap vermedi; yüzdeler yalnızca mevcut kanıtlar üzerinden hesaplandı.':null};
+          });
+        }
+        function decisionEngineView(j) {
+          var p=j.probability||{}, profile=j.profile||{}, target=j.target||{}, criteria=j.criteria||[], longPct=+p.long||0, shortPct=+p.short||0, neutralPct=+p.neutral||0, dir=j.direction||'WAIT', dirClass=dir==='LONG'?'decision-long':(dir==='SHORT'?'decision-short':'decision-neutral');
+          var rows=criteria.map(function(x){var lc=x.long?'decision-long':'',sc=x.short?'decision-short':'',status=x.available?(x.bias==='long'?'LONG':(x.bias==='short'?'SHORT':'NÖTR')):'YOK';return '<tr><td>'+esc(x.label)+'<br><span class="decision-detail">'+esc(x.detail)+' · '+esc(x.source)+'</span></td><td class="'+lc+'">'+(x.available?x.long:'—')+'</td><td class="'+sc+'">'+(x.available?x.short:'—')+'</td><td>'+esc(status)+'</td></tr>';}).join('');
+          return responseStatus(j)+'<div class="decision-engine"><div class="decision-summary"><div class="decision-card"><h3>İşlem yönü</h3><div class="decision-number '+dirClass+'">'+esc(dir)+'</div><div class="decision-meta">'+esc(j.long_score||0)+' Long · '+esc(j.short_score||0)+' Short / '+esc(j.available_criteria||0)+' mevcut kriter</div></div><div class="decision-card"><h3>Kanıt yüzdesi</h3><div><span class="decision-long">Long '+fmtNum(longPct,1)+'%</span> · <span class="decision-short">Short '+fmtNum(shortPct,1)+'%</span></div><div class="decision-meter"><span class="decision-meter-long" style="width:'+Math.min(100,longPct)+'%"></span><span class="decision-meter-short" style="width:'+Math.min(100,shortPct)+'%"></span><span class="decision-meter-neutral" style="width:'+Math.min(100,neutralPct)+'%"></span></div><div class="decision-meta">Nötr/eksik kanıt '+fmtNum(neutralPct,1)+'% · kalibre edilmiş olasılık değildir</div></div><div class="decision-card"><h3>Gerçek hedef · '+esc(dir)+'</h3><div class="decision-target">'+(target.price?'$'+fmtNum(target.price,2):'Bekle / hedef yok')+'</div><div class="decision-meta">'+esc(target.label||'Profil seviyesi yok')+' · mevcut fiyat $'+fmtNum(j.price,2)+'</div></div></div><div class="decision-card"><h3>HVN · LVN · Value Area</h3><div>POC: <b>$'+fmtNum(profile.poc,2)+'</b> · VAH: <b>$'+fmtNum(profile.vah,2)+'</b> · VAL: <b>$'+fmtNum(profile.val,2)+'</b></div><div class="decision-meta">HVN: '+esc((profile.hvn||[]).map(function(x){return '$'+fmtNum(x,2);}).join(' · ')||'—')+'<br>LVN: '+esc((profile.lvn||[]).map(function(x){return '$'+fmtNum(x,2);}).join(' · ')||'—')+'<br>Hedef, yön tarafındaki en yakın gerçek profil seviyesidir.</div></div><div class="decision-card"><h3>Her kriter için +1 / +0</h3><table class="decision-table"><thead><tr><th>Kriter / gerçek kaynak</th><th>Long</th><th>Short</th><th>Sonuç</th></tr></thead><tbody>'+rows+'</tbody></table></div><div class="decision-card"><h3>Veri sağlığı</h3><div class="decision-meta">Kaynak: '+esc(j.source||'—')+' · Güncelleme: '+esc(j.time_utc||'—')+'<br>Funding: '+fmtNum(j.indicators&&j.indicators.funding_rate*100,4)+'% · OI Δ: '+fmtNum(j.indicators&&j.indicators.open_interest_delta,2)+' · RSI: '+fmtNum(j.indicators&&j.indicators.rsi,2)+' · Max pain: $'+fmtNum(j.indicators&&j.indicators.max_pain&&j.indicators.max_pain.price,2)+'<br>'+(j.missing&&j.missing.length?'Eksik gerçek uçlar: '+esc(j.missing.join(', ')):'Tüm skor uçları cevap verdi.')+(j.warning?'<br>'+esc(j.warning):'')+'</div><button class="decision-refresh" onclick="refreshDecisionPanel()">↻ Gerçek veriyi yenile</button></div></div>';
+        }
+        function refreshDecisionPanel(){ if (panelFromUrl()==='Long/Short Skoru') setTab('Long/Short Skoru', true); }
+
         function terminalView(name, j) {
           var pstatus = payloadStatus(j);
           var html = responseStatus(j) + '<div class="term-grid">';
@@ -488,8 +649,7 @@
             }
             html += card('Guard', 'Olasılık Haritası uses calibrated closed historical outcomes only.', 'backend-warn');
           } else if (name === 'Long/Short Skoru') {
-            html += card('Evidence score', listObj(j.scores || j.score || j), 'backend-warn');
-            html += card('Guard', 'These values are NOT calibrated probabilities. Use Olasılık Haritası for that.', 'backend-warn');
+            return decisionEngineView(j);
           } else if (name === 'Likidite ve Liquidation Haritası') {
             var l = j.liquidity || {}, m = j.microstructure || {}, d = j.derivatives || {};
             html += card('Liquidity levels', listObj(l.levels || {}));
@@ -580,6 +740,7 @@
         }
         function setTab(name, fromHistory) {
           var term = document.getElementById('terminal');
+          if (decisionRefreshTimer) { clearTimeout(decisionRefreshTimer); decisionRefreshTimer = null; }
           var panelRequestSeq = ++activePanelRequestSeq;
           activePanelName = name;
           try {
@@ -605,7 +766,7 @@
           var tf = curTF || '1m';
           var map = {
             'Trader Hova': function() { return requestJson('/api/v1/hova/chat', { method: 'POST', requestSeq: panelRequestSeq, timeframe: tf, symbol: SYMBOL, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'terminal_state', timeframe: tf, source: 'website' }) }); },
-            'Long/Short Skoru': function() { return apiGet('/api/v1/score?tf=' + encodeURIComponent(tf)); },
+            'Long/Short Skoru': function() { return fetchRealDecision(tf); },
             'Olasılık Haritası': function() { return apiGet('/api/v1/probability?tf=' + encodeURIComponent(tf)); },
             'Order Flow': function() { return apiGet('/api/v1/orderflow/state?tf=' + encodeURIComponent(tf)); },
             'Money Flow': function() { return loadMoneyFlowLocal(tf); },
@@ -628,6 +789,9 @@
                 return;
               }
               var content = document.getElementById('panel-content'); if (content) content.innerHTML = terminalView(name, j);
+              if (name === 'Long/Short Skoru' && panelRequestSeq === activePanelRequestSeq) {
+                decisionRefreshTimer = setTimeout(function(){ if (panelFromUrl() === name) setTab(name, true); }, 15000);
+              }
             }).catch(function(e){
               if (panelRequestSeq !== activePanelRequestSeq || activePanelName !== name || curTF !== tf) { console.warn('NCE stale error ignored', {panel:name, timeframe:tf, requestSequence:panelRequestSeq}); return; }
               var content = document.getElementById('panel-content');
@@ -797,6 +961,11 @@
           return mk;
         }
         function setSeries(list, tf){
+          /* Keep the user's visible range while live data is replaced. Without
+           * this snapshot, setData() can re-anchor the chart at the newest bar
+           * after a left drag. */
+          var preservedRange = chart ? chart.timeScale().getVisibleLogicalRange() : null;
+          var wasFollowingLive = followLive;
           list = calcNAI(list);
           curData = list;
           cs.setData(list.map(function(x){ return {time: x.t, open: x.o, high: x.h, low: x.l, close: x.c}; }));
@@ -808,7 +977,10 @@
           ss.setData(pan.nai ? list.map(function(x){ return {time: x.t, value: x.naiSell || 0, color: x.closed ? '#f85149' : 'rgba(248,81,73,0.35)'}; }) : []);
           updateOverlays(list);
           resizeC();
-          applyViewport(tf || curTF, list.length, false);
+          if (wasFollowingLive) applyViewport(tf || curTF, list.length, false);
+          else if (preservedRange) {
+            try { chart.timeScale().setVisibleLogicalRange(preservedRange); } catch (e) { console.warn('viewport restore skipped', e && e.message || e); }
+          }
           var last = list[list.length - 1];
           window.__nceDebug = { tf: curTF, live: ENABLE_LIVE, market: MARKET, volume_unit: VOLUME_UNIT, bars: list.length, data: function(){ return curData; }, chart: function(){ return chart; }, followLive: function(){ return followLive; }, setTF: loadTF, goLive: goLive, nai: last && { buy: last.naiBuy, sell: last.naiSell, events: last.naiEvents, provisionalEvents: last.naiProvisionalEvents, closed: last.closed, t: last.t, c: last.c, v: last.v, bv: last.bv, sv: last.sv }, first: list[0] && list[0].t, last: last && last.t, closed: last && last.closed, visible: chart.timeScale().getVisibleLogicalRange(), markers: markers.length, scale: 'NAI fixed 0-100', ws: lastWsUrl || null, wsState: wsState };
         }
