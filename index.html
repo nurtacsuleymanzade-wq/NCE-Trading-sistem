@@ -184,10 +184,11 @@
                 <div class="sg-grid">
                     <div class="sg-item"><b class="sg-green">IB</b> Initiative Buy — təşəbbüskar alıcı</div>
                     <div class="sg-item"><b class="sg-red">IS</b> Initiative Sell — təşəbbüskar satıcı</div>
+                    <div class="sg-item"><b class="sg-green">BA</b> Buy Absorption — alışın udulması</div>
+                    <div class="sg-item"><b class="sg-yellow">SA</b> Sell Absorption — satışın udulması</div>
                     <div class="sg-item"><b class="sg-yellow">BE</b> Buy Exhaustion — alıcı gücünün tükənməsi</div>
                     <div class="sg-item"><b class="sg-purple">SE</b> Sell Exhaustion — satıcı gücünün tükənməsi</div>
                     <div class="sg-item"><b class="sg-red">BX</b> Trapped Buyers — tələyə düşmüş alıcılar</div>
-                    <div class="sg-item"><b class="sg-yellow">SA</b> Sell Absorption — satışın udulması</div>
                 </div>
             </details>
             <button id="liveBtn" onclick="goLive()" style="opacity: 0.55; top: 45px;">LIVE</button> <!-- Moved live button to avoid overlap -->
@@ -218,6 +219,7 @@
         var chart, cs, vs, bs, ss, guide50, guide70, guide85;
         var overlaySeries = {}, overlayLines = [], profileBox = null;
         var curTF = '1m', curData = [], followLive = true, userScrolled = false, viewportLock = false, viewportPointer = null;
+        var mtfLevels = null, mtfLevelsLoadedAt = 0;
         var wsKline, ws1s, wsPrice, reconnectTimers = {}, reconnectDelay = {}, wsBaseIndex = {}, wsMsgSeen = {};
         var ENABLE_LIVE = true; // Set to false to disable live updates
         var serverSkewMs = 0;
@@ -282,9 +284,9 @@
         function archiveCollectorTail(){}
         var pan = {vol:true,del:true,nai:true};
         var ind = {vwap:true,poc:true,hvn:false,lvn:false,vah:true,val:true,valueArea:true,bb:false,volumeProfile:false,marketProfile:false};
-        var structureInd = {hh:true,hl:true,lh:true,ll:true,bos:true,choch:true,msb:true,bullishOB:true,bearishOB:true,breaker:true};
-        var STRUCTURE_LABELS = {hh:'HH',hl:'HL',lh:'LH',ll:'LL',bos:'BOS',choch:'CHoCH',msb:'MSB',bullishOB:'Bull OB',bearishOB:'Bear OB',breaker:'Breaker'};
-        var STRUCTURE_COLORS = {hh:'#3fb950',hl:'#3fb950',lh:'#f85149',ll:'#f85149',bos:'#58a6ff',choch:'#f2cc60',msb:'#bc8cff',bullishOB:'#3fb950',bearishOB:'#f85149',breaker:'#d29922'};
+        var structureInd = {hh:true,hl:true,lh:true,ll:true,bos:true,choch:true,msb:true,bullishOB:true,bearishOB:true,breaker:true,mtf:true,pd:true};
+        var STRUCTURE_LABELS = {hh:'HH',hl:'HL',lh:'LH',ll:'LL',bos:'BOS',choch:'CHoCH',msb:'MSB',bullishOB:'Bull OB',bearishOB:'Bear OB',breaker:'Breaker',mtf:'MTF H/L',pd:'P/D EQ'};
+        var STRUCTURE_COLORS = {hh:'#3fb950',hl:'#3fb950',lh:'#f85149',ll:'#f85149',bos:'#58a6ff',choch:'#f2cc60',msb:'#bc8cff',bullishOB:'#3fb950',bearishOB:'#f85149',breaker:'#d29922',mtf:'#79c0ff',pd:'#d29922'};
         var IND_COLORS = {vwap:'#58a6ff',poc:'#f85149',hvn:'#f59e0b',lvn:'#a371f7',vah:'#3fb950',val:'#ef5350',bb:'#d29922',volumeProfile:'#8b949e',marketProfile:'#f2cc60'};
         var chart,cs,vs,bs,ss,guide50,guide70,guide85;
         var overlaySeries={vwap:null,bbU:null,bbM:null,bbL:null,valueArea:null}, overlayLines=[], profileBox=null;
@@ -913,7 +915,14 @@
               if (invalid) { z.invalidated=true; if (structureInd.breaker) marker(current,'breaker',z.type==='long'?'aboveBar':'belowBar','square'); }
             });
           }
-          return {markers:markers,zones:activeZones.filter(function(x){return !x.invalidated;})};
+          if (structureInd.mtf && mtfLevels && mtfLevels.length && rows.length) {
+            var lastRow = rows[rows.length - 1];
+            mtfLevels.forEach(function(lv){
+              markers.push({time:lastRow.t,position:'aboveBar',color:lv.color,shape:'circle',text:lv.tf+' H',size:1});
+              markers.push({time:lastRow.t,position:'belowBar',color:lv.color,shape:'circle',text:lv.tf+' L',size:1});
+            });
+          }
+          return {markers:markers,zones:activeZones.filter(function(x){return !x.invalidated;}),highs:highs,lows:lows};
         }
 
         function resetOverlays(){
@@ -945,10 +954,47 @@
           return {poc:arr[pocIndex].price,vah:arr[right].high,val:arr[left].low,bins:count,coverage:total?take/total:0,method:'contiguous_tpo_70pct_time_at_price'};
         }
         function addLine(price, color, title, style){ if (!isFinite(price)) return; overlayLines.push(cs.createPriceLine({price: price, color: color, lineWidth: 1, lineStyle: style || LightweightCharts.LineStyle.Solid, axisLabelVisible: true, title: title})); }
+        function loadMtfLevels(){
+          var intvs = [['1D','1d','#58a6ff'],['1W','1w','#bc8cff'],['1M','1M','#f59e0b']];
+          return Promise.all(intvs.map(function(p){
+            return marketGet('/api/v1/market/klines?symbol=BTCUSDT&interval=' + p[1] + '&limit=5', BIN + BIN_PATH + '/klines?symbol=BTCUSDT&interval=' + p[1] + '&limit=5')
+              .then(function(resp){ var k = resp.klines || resp; if (!Array.isArray(k) || !k.length) return null; var last = k[k.length - 1], prev = k[k.length - 2] || last; return { tf: p[0], color: p[2], high: Math.max(+last[2], +prev[2]), low: Math.min(+last[3], +prev[3]), t: Math.floor(+last[0] / 1000), interval: p[1] }; })
+              .catch(function(){ return null; });
+          })).then(function(levels){ mtfLevels = levels.filter(Boolean); mtfLevelsLoadedAt = Date.now(); if (curData.length) setSeries(curData, curTF); return mtfLevels; });
+        }
         function updateOverlays(list, structureState){ if (!chart || !cs) return; resetOverlays(); var rows = closedBars(list); if (rows.length < 3) return; if (ind.vwap) { overlaySeries.vwap = chart.addLineSeries({ color: IND_COLORS.vwap, lineWidth: 2, priceScaleId: 'right', lastValueVisible: true, title: 'VWAP ' + curTF }); overlaySeries.vwap.setData(computeVWAP(rows)); }
           if (ind.bb && rows.length >= 20) { var bb = computeBB(rows, 20, 2); overlaySeries.bbU = chart.addLineSeries({ color: IND_COLORS.bb, lineWidth: 1, priceScaleId: 'right', lastValueVisible: false, title: 'BB upper' }); overlaySeries.bbM = chart.addLineSeries({ color: 'rgba(210,153,34,.55)', lineWidth: 1, priceScaleId: 'right', lastValueVisible: false, title: 'BB mid' }); overlaySeries.bbL = chart.addLineSeries({ color: IND_COLORS.bb, lineWidth: 1, priceScaleId: 'right', lastValueVisible: false, title: 'BB lower' }); overlaySeries.bbU.setData(bb.upper); overlaySeries.bbM.setData(bb.mid); overlaySeries.bbL.setData(bb.lower); }
-          var prof = computeProfile(rows, 48), tpo = ind.marketProfile ? computeTPOProfile(rows, 48) : null; if (ind.valueArea && prof.vah > prof.val) { overlaySeries.valueArea = chart.addAreaSeries({ topColor: 'rgba(88,166,255,.16)', bottomColor: 'rgba(88,166,255,.04)', lineColor: 'rgba(88,166,255,.32)', lineWidth: 1, priceScaleId: 'right', lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false, title: 'Value Area 70%' }); overlaySeries.valueArea.applyOptions({ baseValue: { type: 'price', price: prof.val } }); overlaySeries.valueArea.setData(rows.map(function(x){ return { time: x.t, value: prof.vah }; })); } if (ind.poc) addLine(prof.poc, IND_COLORS.poc, 'POC ' + curTF, LightweightCharts.LineStyle.Solid); if (ind.vah) addLine(prof.vah, IND_COLORS.vah, 'VAH ' + curTF, LightweightCharts.LineStyle.Dotted); if (ind.val) addLine(prof.val, IND_COLORS.val, 'VAL ' + curTF, LightweightCharts.LineStyle.Dotted); if (ind.hvn) (prof.hvn || []).forEach(function(p, i){ addLine(p, IND_COLORS.hvn, 'HVN ' + (i + 1), LightweightCharts.LineStyle.Dashed); }); if (ind.lvn) (prof.lvn || []).forEach(function(p, i){ addLine(p, IND_COLORS.lvn, 'LVN ' + (i + 1), LightweightCharts.LineStyle.Dashed); }); var structure = structureState || marketStructureMarkers(rows); (structure.zones || []).forEach(function(z){ if (structureInd[z.key]) addLine(z.price, STRUCTURE_COLORS[z.key], STRUCTURE_LABELS[z.key], LightweightCharts.LineStyle.Dashed); }); if (ind.volumeProfile || ind.marketProfile) { profileBox = document.createElement('div'); profileBox.className = 'profile-pill'; profileBox.innerHTML = '<b>' + esc(curTF) + ' Profile</b><br>POC <span style="color:' + IND_COLORS.poc + '">' + fmtNum(prof.poc, 2) + '</span> · VAH <span style="color:' + IND_COLORS.vah + '">' + fmtNum(prof.vah, 2) + '</span> · VAL <span style="color:' + IND_COLORS.val + '">' + fmtNum(prof.val, 2) + '</span><br>' + (ind.volumeProfile ? 'Volume Profile: ' + prof.bins + ' bins · quote volume<br>' : '') + (ind.marketProfile && tpo ? 'TPO Profile: POC ' + fmtNum(tpo.poc, 2) + ' · VAH ' + fmtNum(tpo.vah, 2) + ' · VAL ' + fmtNum(tpo.val, 2) : ''); document.getElementById('ct').appendChild(profileBox); }
-        }
+          var prof = computeProfile(rows, 48), tpo = ind.marketProfile ? computeTPOProfile(rows, 48) : null; if (ind.valueArea && prof.vah > prof.val) { overlaySeries.valueArea = chart.addAreaSeries({ topColor: 'rgba(88,166,255,.16)', bottomColor: 'rgba(88,166,255,.04)', lineColor: 'rgba(88,166,255,.32)', lineWidth: 1, priceScaleId: 'right', lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false, title: 'Value Area 70%' }); overlaySeries.valueArea.applyOptions({ baseValue: { type: 'price', price: prof.val } }); overlaySeries.valueArea.setData(rows.map(function(x){ return { time: x.t, value: prof.vah }; })); } if (ind.poc) addLine(prof.poc, IND_COLORS.poc, 'POC ' + curTF, LightweightCharts.LineStyle.Solid); if (ind.vah) addLine(prof.vah, IND_COLORS.vah, 'VAH ' + curTF, LightweightCharts.LineStyle.Dotted); if (ind.val) addLine(prof.val, IND_COLORS.val, 'VAL ' + curTF, LightweightCharts.LineStyle.Dotted); if (ind.hvn) (prof.hvn || []).forEach(function(p, i){ addLine(p, IND_COLORS.hvn, 'HVN ' + (i + 1), LightweightCharts.LineStyle.Dashed); }); if (ind.lvn) (prof.lvn || []).forEach(function(p, i){ addLine(p, IND_COLORS.lvn, 'LVN ' + (i + 1), LightweightCharts.LineStyle.Dashed); }); var structure = structureState || marketStructureMarkers(rows);
+ if (structure.highs && structure.highs.length > 1 && (structureInd.hh || structureInd.lh)) {
+   overlaySeries.swingHigh = chart.addLineSeries({ color: 'rgba(63,185,80,.55)', lineWidth: 1, priceScaleId: 'right', lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false, title: 'Swing Highs' });
+   overlaySeries.swingHigh.setData(structure.highs.map(function(h){ return { time: h.time, value: h.price }; }));
+ }
+ if (structure.lows && structure.lows.length > 1 && (structureInd.hl || structureInd.ll)) {
+   overlaySeries.swingLow = chart.addLineSeries({ color: 'rgba(248,81,73,.55)', lineWidth: 1, priceScaleId: 'right', lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false, title: 'Swing Lows' });
+   overlaySeries.swingLow.setData(structure.lows.map(function(l){ return { time: l.time, value: l.price }; }));
+ }
+ (structure.zones || []).forEach(function(z){ if (structureInd[z.key]) addLine(z.price, STRUCTURE_COLORS[z.key], STRUCTURE_LABELS[z.key], LightweightCharts.LineStyle.Dashed); }); if (ind.volumeProfile || ind.marketProfile) { profileBox = document.createElement('div'); profileBox.className = 'profile-pill'; profileBox.innerHTML = '<b>' + esc(curTF) + ' Profile</b><br>POC <span style="color:' + IND_COLORS.poc + '">' + fmtNum(prof.poc, 2) + '</span> · VAH <span style="color:' + IND_COLORS.vah + '">' + fmtNum(prof.vah, 2) + '</span> · VAL <span style="color:' + IND_COLORS.val + '">' + fmtNum(prof.val, 2) + '</span><br>' + (ind.volumeProfile ? 'Volume Profile: ' + prof.bins + ' bins · quote volume<br>' : '') + (ind.marketProfile && tpo ? 'TPO Profile: POC ' + fmtNum(tpo.poc, 2) + ' · VAH ' + fmtNum(tpo.vah, 2) + ' · VAL ' + fmtNum(tpo.val, 2) : ''); document.getElementById('ct').appendChild(profileBox); }
+ if (structureInd.pd && rows.length >= 20) {
+   var pdWin = rows.slice(-200), pdHigh = -Infinity, pdLow = Infinity;
+   pdWin.forEach(function(x){ if (x.h > pdHigh) pdHigh = x.h; if (x.l < pdLow) pdLow = x.l; });
+   var eq = (pdHigh + pdLow) / 2;
+   if (isFinite(eq) && pdHigh > pdLow) {
+     overlaySeries.premium = chart.addAreaSeries({ topColor: 'rgba(248,81,73,.10)', bottomColor: 'rgba(248,81,73,.02)', lineColor: 'rgba(248,81,73,.35)', lineWidth: 1, priceScaleId: 'right', lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false, title: 'Premium' });
+     overlaySeries.premium.applyOptions({ baseValue: { type: 'price', price: eq } });
+     overlaySeries.premium.setData(rows.map(function(x){ return { time: x.t, value: pdHigh }; }));
+     overlaySeries.discount = chart.addAreaSeries({ topColor: 'rgba(63,185,80,.10)', bottomColor: 'rgba(63,185,80,.02)', lineColor: 'rgba(63,185,80,.35)', lineWidth: 1, priceScaleId: 'right', lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false, title: 'Discount' });
+     overlaySeries.discount.applyOptions({ baseValue: { type: 'price', price: pdLow } });
+     overlaySeries.discount.setData(rows.map(function(x){ return { time: x.t, value: eq }; }));
+     addLine(eq, '#f2cc60', 'EQ', LightweightCharts.LineStyle.Solid);
+   }
+ }
+ if (structureInd.mtf && mtfLevels && mtfLevels.length) {
+   mtfLevels.forEach(function(lv){
+     addLine(lv.high, lv.color, lv.tf + ' H', LightweightCharts.LineStyle.Dashed);
+     addLine(lv.low, lv.color, lv.tf + ' L', LightweightCharts.LineStyle.Dashed);
+   });
+ }
+ }
         function toggleInd(k){ ind[k]=!ind[k]; updBar(); if (curData.length) updateOverlays(curData); }
         function toggleStructure(k){ structureInd[k]=!structureInd[k]; updBar(); if (curData.length) setSeries(curData, curTF); }
         function ema(prev, val, len){ var a = 2 / (len + 1); return prev == null ? val : (prev + a * (val - prev)); }
@@ -1118,7 +1164,7 @@
         function intervalFor(tf){ return {'1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m', '1h': '1h', '4h': '4h', '1D': '1d', '3D': '3d'}[tf]; }
         function openKlineSocket(tf){ if (!ENABLE_LIVE || tf === '1s') return; var intv = intervalFor(tf); if (!intv) return; var tag = tf, bases = [WS_KLINE_BASE, WS_KLINE_FALLBACK_BASE], bi = wsBaseIndex[tag] || 0; lastWsUrl = bases[bi] + 'btcusdt@kline_' + intv; wsState = 'CONNECTING'; setWsLabel(); wsMsgSeen[tag] = false; wsKline = new WebSocket(lastWsUrl); var idle = setTimeout(function(){ if (curTF === tag && wsKline && !wsMsgSeen[tag]) { wsBaseIndex[tag] = (bi + 1) % bases.length; try { wsKline.close(); } catch(e){} } }, 12000); wsKline.onopen = function(){ reconnectDelay[tag] = 1000; wsState = 'OPEN'; setWsLabel(); }; wsKline.onmessage = function(e){ try { wsMsgSeen[tag] = true; clearTimeout(idle); var d = JSON.parse(e.data), bar = wsKlineToBar(d); if (curTF !== tag) return; if (tag === '3D') { loadFromBinance('3D'); return; } upsertBar(bar); if (bar.closed) archiveCollector('binance_ws_kline_' + tag, tag, [bar]); } catch(err) { console.error('kline ws parse', err); } }; wsKline.onerror = function(){ wsState = 'ERROR'; setWsLabel(); }; wsKline.onclose = function(){ clearTimeout(idle); if (curTF !== tag || !ENABLE_LIVE) return; wsState = 'RECONNECT'; setWsLabel(); var delay = reconnectDelay[tag] || 1000; reconnectDelay[tag] = Math.min(delay * 2, 30000); reconnectTimers[tag] = setTimeout(function(){ openKlineSocket(tag); }, delay); }; }
         function attach1mAbsorptionSummary(rows){ return fetch('data/bars_1s.json?ts='+Date.now()).then(function(r){ return r.ok ? r.json() : []; }).then(function(one){ archiveCollectorTail('local_absorption_seed_1s','1s',one.map(normalizeBar),1200); var calc=calcNAI(one), m={}; calc.forEach(function(x){ if(!x.closed)return; var key=Math.floor(x.t/60)*60; m[key]=m[key]||{ba:0,sa:0}; if(x.naiBuyAbsorption)m[key].ba++; if(x.naiSellAbsorption)m[key].sa++; }); rows.forEach(function(r){ var z=m[Math.floor(r.t/60)*60]; if(z){r.nai1sBASeconds=z.ba||0;r.nai1sSASeconds=z.sa||0;} }); return rows; }).catch(function(){ return rows; }); }
-        function loadTF(tf, fromHistory){ try { console.log('LOADTF START', tf, loadSeq, Date.now()); curTF = tf || curTF || '1D'; tf = curTF; var seq = ++loadSeq; console.log('LOADTF SEQ', seq, tf, Date.now()); localStorage.setItem('nceCurrentTF', curTF); try { var tfUrl = new URL(window.location.href); tfUrl.searchParams.set('tf', curTF); var currentPanel = panelFromUrl(); if (currentPanel) tfUrl.searchParams.set('panel', currentPanel); if (fromHistory) window.history.replaceState({panel: currentPanel || 'Grafik', tf: curTF}, '', tfUrl.toString()); else if (tfFromUrl() !== curTF) window.history.pushState({panel: currentPanel || 'Grafik', tf: curTF}, '', tfUrl.toString()); } catch (urlError) {} document.querySelectorAll('#tf button').forEach(function(b){ b.classList.toggle('on', b.textContent === curTF); }); var mpEl = document.getElementById('mp'); if (mpEl) mpEl.innerHTML = '<b>' + tfText(curTF) + '</b>'; syncInstantPrice(); closeSockets(); lastWsUrl = null; wsState = ENABLE_LIVE ? 'START' : 'STATIC'; setWsLabel(); function still(){ return seq === loadSeq && curTF === tf; } function refreshActivePanel(){ var active = panelFromUrl(); if (still() && active) setTab(active); } if (tf === '1s') { load1s(seq); refreshActivePanel(); return; } if (tf === '1m') { loadLocalBars(tf).then(function(){ if (!still()) return; return attach1mAbsorptionSummary(curData).then(function(rows){ if (still()) renderData(rows); }); }).finally(function(){ if (!still()) return; return loadFromBinance(tf).catch(function(e){ console.warn(e.message); }); }).finally(function(){ if (still()) { openKlineSocket(tf); refreshActivePanel(); } }); return; } loadLocalBars(tf).finally(function(){ if (!still()) return; return loadFromBinance(tf).catch(function(e){ console.warn(e.message); }); }).finally(function(){ if (still()) { openKlineSocket(tf); refreshActivePanel(); } }); } catch(e) { console.error('loadTF error', e); } }
+        function loadTF(tf, fromHistory){ try { console.log('LOADTF START', tf, loadSeq, Date.now()); curTF = tf || curTF || '1D'; tf = curTF; var seq = ++loadSeq; console.log('LOADTF SEQ', seq, tf, Date.now()); localStorage.setItem('nceCurrentTF', curTF); try { var tfUrl = new URL(window.location.href); tfUrl.searchParams.set('tf', curTF); var currentPanel = panelFromUrl(); if (currentPanel) tfUrl.searchParams.set('panel', currentPanel); if (fromHistory) window.history.replaceState({panel: currentPanel || 'Grafik', tf: curTF}, '', tfUrl.toString()); else if (tfFromUrl() !== curTF) window.history.pushState({panel: currentPanel || 'Grafik', tf: curTF}, '', tfUrl.toString()); } catch (urlError) {} document.querySelectorAll('#tf button').forEach(function(b){ b.classList.toggle('on', b.textContent === curTF); }); var mpEl = document.getElementById('mp'); if (mpEl) mpEl.innerHTML = '<b>' + tfText(curTF) + '</b>'; syncInstantPrice(); closeSockets(); lastWsUrl = null; wsState = ENABLE_LIVE ? 'START' : 'STATIC'; setWsLabel(); if (Date.now() - mtfLevelsLoadedAt > 60000) loadMtfLevels(); function still(){ return seq === loadSeq && curTF === tf; } function refreshActivePanel(){ var active = panelFromUrl(); if (still() && active) setTab(active); } if (tf === '1s') { load1s(seq); refreshActivePanel(); return; } if (tf === '1m') { loadLocalBars(tf).then(function(){ if (!still()) return; return attach1mAbsorptionSummary(curData).then(function(rows){ if (still()) renderData(rows); }); }).finally(function(){ if (!still()) return; return loadFromBinance(tf).catch(function(e){ console.warn(e.message); }); }).finally(function(){ if (!still()) { openKlineSocket(tf); refreshActivePanel(); } }); return; } loadLocalBars(tf).finally(function(){ if (!still()) return; return loadFromBinance(tf).catch(function(e){ console.warn(e.message); }); }).finally(function(){ if (!still()) { openKlineSocket(tf); refreshActivePanel(); } }); } catch(e) { console.error('loadTF error', e); } }
         function add1sTrade(ms, p, qty, buy){ var t = Math.floor(ms / 1000), quote = p * qty; if (!oneSecondBars[t]) oneSecondBars[t] = {t: t, o: p, h: p, l: p, c: p, v: 0, quote_v: 0, base_v: 0, bv: 0, sv: 0, volume_unit: 'QUOTE_USDT', closed: false}; var c = oneSecondBars[t]; c.h = Math.max(c.h, p); c.l = Math.min(c.l, p); c.c = p; c.v += quote; c.quote_v += quote; c.base_v += qty; if (buy) c.bv += quote; else c.sv += quote; Object.keys(oneSecondBars).forEach(function(k){ oneSecondBars[k].closed = (+k) < t; if (+k < t - 86400) delete oneSecondBars[k]; }); }
         function load1s(seq){ curData = []; oneSecondBars = {}; renderData([]); loadLocalBars('1s').then(function(){ if (seq !== loadSeq || curTF !== '1s') return; curData.forEach(function(x){ oneSecondBars[x.t] = x; }); }).finally(function(){ if (seq === loadSeq && curTF === '1s' && ENABLE_LIVE) open1sSocket(); if (seq === loadSeq && curTF === '1s') { var active=panelFromUrl(); if (active) setTab(active,true); } }); }
         function flush1s(){ var list = Object.values(oneSecondBars).sort(function(a, b){ return a.t - b.t; }); if (!list.length) return; setSeries(list, '1s'); showPrice(curData); showStats('1s', curData); var maxClosed = Math.floor(nowServerMs() / 1000) - 1; var closed = list.filter(function(x){ return x.t <= maxClosed && x.t > (collectorArchiveState.oneSecLastT || 0); }); if (closed.length) { collectorArchiveState.oneSecLastT = closed[closed.length - 1].t; archiveCollectorTail('binance_ws_aggtrade_1s', '1s', closed, 300); } }
