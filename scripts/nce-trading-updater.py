@@ -62,6 +62,8 @@ def kline_to_bar(row, server_ms: int):
         "l": float(row[3]),
         "c": float(row[4]),
         "v": total_quote,
+        "quote_v": total_quote,
+        "base_v": float(row[5]),
         "bv": buy_quote,
         "sv": sell_quote,
         "volume_unit": "QUOTE_USDT",
@@ -92,6 +94,8 @@ def aggregate_3d(days):
             "l": min(x["l"] for x in group),
             "c": group[-1]["c"],
             "v": bv + sv,
+            "quote_v": bv + sv,
+            "base_v": sum(x.get("base_v", 0) for x in group),
             "bv": bv,
             "sv": sv,
             "volume_unit": "QUOTE_USDT",
@@ -158,11 +162,13 @@ def update_1s():
         buy = not bool(r.get("m"))
         b = buckets.get(t)
         if not b:
-            b = buckets[t] = {"t": t, "o": price, "h": price, "l": price, "c": price, "v": 0.0, "bv": 0.0, "sv": 0.0, "volume_unit": "QUOTE_USDT", "closed": True}
+            b = buckets[t] = {"t": t, "o": price, "h": price, "l": price, "c": price, "v": 0.0, "quote_v": 0.0, "base_v": 0.0, "bv": 0.0, "sv": 0.0, "volume_unit": "QUOTE_USDT", "closed": True}
         b["h"] = max(b["h"], price)
         b["l"] = min(b["l"], price)
         b["c"] = price
         b["v"] += quote_volume
+        b["quote_v"] += quote_volume
+        b["base_v"] += qty
         if buy:
             b["bv"] += quote_volume
         else:

@@ -74,11 +74,13 @@ def merge_trade(bars, msg):
     buy = not bool(msg.get("m"))
     b = bars.get(t)
     if not b:
-        b = bars[t] = {"t": t, "o": price, "h": price, "l": price, "c": price, "v": 0.0, "bv": 0.0, "sv": 0.0, "volume_unit": "QUOTE_USDT", "closed": True}
+        b = bars[t] = {"t": t, "o": price, "h": price, "l": price, "c": price, "v": 0.0, "quote_v": 0.0, "base_v": 0.0, "bv": 0.0, "sv": 0.0, "volume_unit": "QUOTE_USDT", "closed": True}
     b["h"] = max(b["h"], price)
     b["l"] = min(b["l"], price)
     b["c"] = price
     b["v"] += quote
+    b["quote_v"] += quote
+    b["base_v"] += qty
     if buy:
         b["bv"] += quote
     else:
@@ -130,11 +132,13 @@ def update_bar(bars, msg):
     buy = not bool(msg.get("m"))  # m=false => buyer was taker => aggressive buy
     b = bars.get(t)
     if not b:
-        b = bars[t] = {"t": t, "o": price, "h": price, "l": price, "c": price, "v": 0.0, "bv": 0.0, "sv": 0.0, "volume_unit": "QUOTE_USDT", "closed": t < now_s}
+        b = bars[t] = {"t": t, "o": price, "h": price, "l": price, "c": price, "v": 0.0, "quote_v": 0.0, "base_v": 0.0, "bv": 0.0, "sv": 0.0, "volume_unit": "QUOTE_USDT", "closed": t < now_s}
     b["h"] = max(b["h"], price)
     b["l"] = min(b["l"], price)
     b["c"] = price
     b["v"] += quote
+    b["quote_v"] += quote
+    b["base_v"] += qty
     if buy:
         b["bv"] += quote
     else:
