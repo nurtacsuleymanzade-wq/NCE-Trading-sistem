@@ -1,0 +1,113 @@
+{
+  "methodology": "60/20/20 chronological train/validation/out-of-sample; no shuffle; calibration mapping learned on TRAIN only; OOS never used for threshold selection",
+  "oos_brier_score_of_train_mapping": 0.2626190100338154,
+  "oos_used_for_threshold_selection": false,
+  "reliability_table_oos": [
+    {
+      "confidence_interval_95": [
+        0.27999563610326017,
+        0.7200043638967398
+      ],
+      "observed_frequency_oos": 0.5,
+      "sample_size": 16,
+      "score_bucket": "0-10",
+      "train_calibrated_probability": 0.3333333333333333
+    },
+    {
+      "confidence_interval_95": null,
+      "observed_frequency_oos": null,
+      "sample_size": 0,
+      "score_bucket": "10-20",
+      "train_calibrated_probability": null
+    },
+    {
+      "confidence_interval_95": null,
+      "observed_frequency_oos": null,
+      "sample_size": 0,
+      "score_bucket": "20-30",
+      "train_calibrated_probability": null
+    },
+    {
+      "confidence_interval_95": null,
+      "observed_frequency_oos": null,
+      "sample_size": 0,
+      "score_bucket": "30-40",
+      "train_calibrated_probability": null
+    },
+    {
+      "confidence_interval_95": [
+        0.3614229961987329,
+        0.6976761109230025
+      ],
+      "observed_frequency_oos": 0.5333333333333333,
+      "sample_size": 30,
+      "score_bucket": "40-50",
+      "train_calibrated_probability": 0.45263157894736844
+    },
+    {
+      "confidence_interval_95": null,
+      "observed_frequency_oos": null,
+      "sample_size": 0,
+      "score_bucket": "50-60",
+      "train_calibrated_probability": null
+    },
+    {
+      "confidence_interval_95": [
+        0.24809535365737387,
+        0.698830199745016
+      ],
+      "observed_frequency_oos": 0.4666666666666667,
+      "sample_size": 15,
+      "score_bucket": "60-70",
+      "train_calibrated_probability": 0.35714285714285715
+    },
+    {
+      "confidence_interval_95": null,
+      "observed_frequency_oos": null,
+      "sample_size": 0,
+      "score_bucket": "70-80",
+      "train_calibrated_probability": null
+    },
+    {
+      "confidence_interval_95": null,
+      "observed_frequency_oos": null,
+      "sample_size": 0,
+      "score_bucket": "80-90",
+      "train_calibrated_probability": null
+    },
+    {
+      "confidence_interval_95": null,
+      "observed_frequency_oos": null,
+      "sample_size": 0,
+      "score_bucket": "90-100",
+      "train_calibrated_probability": null
+    }
+  ],
+  "score_is_probability": false,
+  "splits": {
+    "OUT_OF_SAMPLE": {
+      "continuation_rate": 0.5081967213114754,
+      "median_return": 6.980876548401405e-05,
+      "resolved_size": 61,
+      "sample_size": 63
+    },
+    "TRAIN": {
+      "continuation_rate": 0.39893617021276595,
+      "median_return": -0.00018088709526509206,
+      "resolved_size": 188,
+      "sample_size": 188
+    },
+    "VALIDATION": {
+      "continuation_rate": 0.5079365079365079,
+      "median_return": 8.635791655353664e-05,
+      "resolved_size": 63,
+      "sample_size": 63
+    }
+  },
+  "status": "DERIVED",
+  "train_bin_mapping": {
+    "0": 0.3333333333333333,
+    "4": 0.45263157894736844,
+    "6": 0.35714285714285715
+  }
+}

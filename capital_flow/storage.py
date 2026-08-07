@@ -46,6 +46,10 @@ CREATE TABLE IF NOT EXISTS top_trader_positions_raw (
   symbol TEXT NOT NULL, period TEXT NOT NULL, timestamp_ms INTEGER NOT NULL,
   payload_json TEXT NOT NULL, PRIMARY KEY(symbol, period, timestamp_ms)
 );
+CREATE TABLE IF NOT EXISTS global_ls_raw (
+  symbol TEXT NOT NULL, period TEXT NOT NULL, timestamp_ms INTEGER NOT NULL,
+  payload_json TEXT NOT NULL, PRIMARY KEY(symbol, period, timestamp_ms)
+);
 CREATE TABLE IF NOT EXISTS coinmetrics_raw (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp_ms INTEGER, payload_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS graphsense_transactions_raw (txid TEXT PRIMARY KEY, timestamp_ms INTEGER, payload_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS etf_source_raw (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp_ms INTEGER, fund TEXT, payload_json TEXT NOT NULL);
@@ -115,6 +119,23 @@ class CapitalFlowStore:
         self.conn.execute(f"INSERT OR REPLACE INTO {table}(symbol, period, timestamp_ms, payload_json) VALUES(?, ?, ?, ?)", (symbol, period, timestamp_ms, json.dumps(payload, separators=(",", ":"))))
         self.conn.commit()
 
+    def insert_global_ls(self, symbol: str, period: str, timestamp_ms: int, payload: dict[str, Any]) -> None:
+        self.conn.execute("INSERT OR REPLACE INTO global_ls_raw(symbol, period, timestamp_ms, payload_json) VALUES(?, ?, ?, ?)", (symbol, period, timestamp_ms, json.dumps(payload, separators=(",", ":"))))
+        self.conn.commit()
+
+    def history(self, table: str, symbol: str = "BTCUSDT", limit: int = 200) -> list[dict[str, Any]]:
+        allowed = {"oi_raw", "funding_raw", "top_trader_accounts_raw", "top_trader_positions_raw", "global_ls_raw"}
+        if table not in allowed:
+            raise ValueError("unsupported history table")
+        rows = self.conn.execute(f"SELECT * FROM {table} WHERE symbol = ? ORDER BY timestamp_ms DESC LIMIT ?", (symbol, limit)).fetchall()
+        result = []
+        for row in rows:
+            item = dict(row)
+            if "payload_json" in item:
+                item["payload"] = json.loads(item.pop("payload_json"))
+            result.append(item)
+        return list(reversed(result))
+
     def liquidation_window(self, symbol: str = "BTCUSDT", since_ms: int | None = None) -> dict[str, float]:
         where = "WHERE symbol = ?" + (" AND timestamp_ms >= ?" if since_ms else "")
         params: list[Any] = [symbol]
@@ -149,7 +170,7 @@ class CapitalFlowStore:
 
     def health(self) -> dict[str, Any]:
         tables = {}
-        for table in ("spot_aggtrades_raw", "futures_aggtrades_raw", "orderbook_raw", "oi_raw", "funding_raw", "liquidations_raw"):
+        for table in ("spot_aggtrades_raw", "futures_aggtrades_raw", "orderbook_raw", "oi_raw", "funding_raw", "liquidations_raw", "global_ls_raw"):
             tables[table] = self.conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         return {"path": str(self.path), "status": "PASS", "tables": tables}
 

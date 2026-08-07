@@ -118,6 +118,7 @@ class BinancePublicCollector:
             "last_oi_update": None,
             "last_funding_update": None,
             "last_top_trader_update": None,
+            "last_global_ls_update": None,
             "last_liquidation": None,
             "reconnect_count": 0,
             "error_count": 0,
@@ -321,6 +322,12 @@ class BinancePublicCollector:
                             # time and may be old for the 1d period. Health
                             # must report successful ingestion time instead.
                             self.health["last_top_trader_update"] = now_ms
+                for period in ("5m", "15m", "30m", "1h", "4h", "1d"):
+                    data = await self._rest_json("https://fapi.binance.com/futures/data/globalLongShortAccountRatio", {"symbol": symbol, "period": period, "limit": 1})
+                    if isinstance(data, list) and data:
+                        item = dict(data[-1])
+                        self.store.insert_global_ls(symbol, period, int(item.get("timestamp") or now_ms), item)
+                        self.health["last_global_ls_update"] = now_ms
             except Exception:
                 # The API exposes stale/unavailable status from storage; a
                 # transient poll error is not converted into a numeric value.

@@ -1,0 +1,19 @@
+{
+  "DATA_CONFIDENCE": {
+    "coverage": 0.9680365296803652,
+    "cross_source_agreement": "NOT_ASSESSED",
+    "event_count": 314,
+    "freshness": "HISTORICAL_AS_OF_MANIFEST",
+    "level": "MEDIUM",
+    "missing_inputs": 7,
+    "source_quality": "HIGH"
+  },
+  "EMPIRICAL_CONFIDENCE": {
+    "calibration_quality": "REPORTED_WITH_CI",
+    "level": "MEDIUM",
+    "methodology": "empirical confidence is separate from data confidence; it is not a probability",
+    "oos_sample_size": 61,
+    "sample_size": 314,
+    "stability": "CHECK_REQUIRED"
+  }
+}

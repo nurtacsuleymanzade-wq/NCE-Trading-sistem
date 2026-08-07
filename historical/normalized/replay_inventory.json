@@ -1,0 +1,41 @@
+{
+  "dates": [
+    {
+      "date": "2026-08-05",
+      "event_rows": 288,
+      "futures_rows": 888379,
+      "metrics_rows": 288,
+      "price_rows": 1440,
+      "source": "Binance Data Vision official archive",
+      "spot_rows": 545564,
+      "status": "DERIVED"
+    },
+    {
+      "date": "2026-08-06",
+      "futures_rows": 0,
+      "source": "Binance Data Vision official archive",
+      "spot_rows": 459293,
+      "status": "UNAVAILABLE"
+    },
+    {
+      "date": "2026-08-07",
+      "event_rows": 26,
+      "futures_rows": 46782,
+      "metrics_rows": 119,
+      "price_rows": 46782,
+      "source": "local production SQLite snapshot",
+      "spot_rows": 32318,
+      "status": "DERIVED"
+    }
+  ],
+  "engine": "capital_flow.engine.CapitalFlowEngine",
+  "engine_path_shared_with_live": true,
+  "generated_at": "2026-08-07T05:08:44.138349+00:00",
+  "lookahead_contract": {
+    "etf_sec": "not used in replay without publication timestamps",
+    "features": "timestamp <= T",
+    "labels": "future data allowed only in labels",
+    "percentiles": "past-only; bounded 200000 observation history"
+  },
+  "timeframe_seconds": 300
+}

@@ -1,0 +1,20 @@
+[Unit]
+Description=NCE Capital Flow external context collector (Phase 2-4)
+After=network-online.target nce-capital-flow.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/nce-trader-terminal
+Environment=NCE_CAPITAL_FLOW_DB=/var/lib/nce-trading/capital_flow.sqlite3
+Environment=NCE_CAPITAL_FLOW_CONTEXT_STATE=/var/lib/nce-trading/capital_flow_context.json
+Environment=NCE_CAPITAL_FLOW_COINMETRICS_CACHE=/var/lib/nce-trading/coinmetrics_context.json
+ExecStart=/opt/nce-trader-terminal/.venv/bin/python -m capital_flow.external_collector --interval 900
+Restart=always
+RestartSec=30
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/nce-trading
+
+[Install]
+WantedBy=multi-user.target

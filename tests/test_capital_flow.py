@@ -52,11 +52,12 @@ def test_percentile_buckets_are_dynamic_and_separate():
     assert trader_size_thresholds([], "futures")["status"] == MetricStatus.UNAVAILABLE.value
 
 
-def test_position_state_returns_probabilities_not_a_boolean_rule():
+def test_position_state_returns_score_not_probability():
     state = position_state({"price_change": 1, "delta_oi": 1, "futures_delta": 1, "long_liquidation": 0, "short_liquidation": 0})
     assert state["status"] == MetricStatus.DERIVED.value
-    assert abs(sum(state["probabilities"].values()) - 100) < 0.1
-    assert state["state"] in state["probabilities"]
+    assert 0 <= state["state_score"] <= 100
+    assert state["calibrated_probability"] is None
+    assert "probabilities" not in state
 
 
 def test_depth_sequence_gap_is_not_silently_accepted():

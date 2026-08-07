@@ -46,12 +46,18 @@ class CoinMetricsCommunityClient:
     def discover(self) -> dict[str, Any]:
         try:
             import httpx
-            response = httpx.get(f"{self.base_url}/reference-data/asset-metrics", params={"assets": "btc"}, timeout=15, headers={"User-Agent": "NCE-Capital-Flow/2.0"})
+            response = httpx.get(f"{self.base_url}/catalog-v2/asset-metrics", params={"assets": "btc"}, timeout=15, headers={"User-Agent": "NCE-Capital-Flow/3.0"})
             response.raise_for_status()
             payload = response.json()
+            discovered = []
+            for asset in payload.get("data", []) if isinstance(payload, dict) else []:
+                for metric in asset.get("metrics", []):
+                    for frequency in metric.get("frequencies", []):
+                        discovered.append({"metric_name": metric.get("metric"), "frequency": frequency.get("frequency"), "start_time": frequency.get("min_time"), "end_time": frequency.get("max_time"), "community_accessible": bool(frequency.get("community")), "source": self.base_url})
             self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-            self.cache_path.write_text(json.dumps({"discovered_at": int(time.time() * 1000), "payload": payload}))
-            return {"status": "REAL", "source": self.base_url, "payload": payload, "metadata_cached": True}
+            cache_payload = {"discovered_at": int(time.time() * 1000), "payload": payload, "metrics": discovered}
+            self.cache_path.write_text(json.dumps(cache_payload))
+            return {"status": "REAL", "source": self.base_url, "payload": payload, "metrics": discovered, "metadata_cached": True, "coverage": len(discovered)}
         except Exception as exc:
             return unavailable(self.base_url, "GET /reference-data/asset-metrics?assets=btc; metadata cache", type(exc).__name__)
 
@@ -60,11 +66,17 @@ class CoinMetricsCommunityClient:
         cache = self._cache()
         if not metric_names or not cache.get("payload"):
             return unavailable(self.base_url, "metadata-first GET /timeseries/asset-metrics", "metric list is empty or BTC metadata has not been discovered")
+        available = {str(x.get("metric_name")) for x in cache.get("metrics", []) if x.get("community_accessible") and x.get("frequency") == frequency}
+        allowed = [metric for metric in metric_names if metric in available]
+        missing = [metric for metric in metric_names if metric not in available]
+        if not allowed:
+            return unavailable(self.base_url, "metadata-first GET /timeseries/asset-metrics", f"requested metrics are not community-accessible for BTC/{frequency}: {missing}")
         try:
             import httpx
-            response = httpx.get(f"{self.base_url}/timeseries/asset-metrics", params={"assets": "btc", "metrics": ",".join(metric_names), "frequency": frequency, "limit_per_asset": limit}, timeout=15, headers={"User-Agent": "NCE-Capital-Flow/2.0"})
+            response = httpx.get(f"{self.base_url}/timeseries/asset-metrics", params={"assets": "btc", "metrics": ",".join(allowed), "frequency": frequency, "limit_per_asset": limit}, timeout=15, headers={"User-Agent": "NCE-Capital-Flow/3.0"})
             response.raise_for_status()
-            return {"status": "REAL", "source": self.base_url, "source_type": "Coin Metrics Community API", "timestamp": int(time.time() * 1000), "frequency": frequency, "metrics": metric_names, "payload": response.json(), "methodology": "secondary BTC network/market context; not primary trade flow", "confidence": 0.7, "coverage": 1.0}
+            payload = response.json()
+            return {"status": "REAL", "source": self.base_url, "source_type": "Coin Metrics Community API", "timestamp": int(time.time() * 1000), "frequency": frequency, "metrics": allowed, "missing_metrics": missing, "payload": payload, "methodology": "metadata-validated secondary BTC network context; not primary trade flow", "confidence": 70 if not missing else 55, "coverage": len(allowed) / len(metric_names)}
         except Exception as exc:
             return unavailable(self.base_url, "GET /timeseries/asset-metrics; cached metadata and rate-limited requests", type(exc).__name__)
 
@@ -72,7 +84,7 @@ class CoinMetricsCommunityClient:
 class BinanceSkillRunner:
     """Run Binance Web3 Skills only from a sandbox-local install."""
 
-    ALLOWED = {"smart-money-inflow", "address-pnl-rank"}
+    ALLOWED = {"smart-money-inflow", "address-pnl-rank", "crypto-market-rank"}
 
     def __init__(self, skill_dir: str | os.PathLike[str] = "/tmp/nce-binance-skills") -> None:
         self.skill_dir = Path(skill_dir)
@@ -85,7 +97,12 @@ class BinanceSkillRunner:
             return unavailable("Binance Skills Hub", "sandbox-local crypto-market-rank CLI", "skill is not installed in the sandbox; no global installation was attempted")
         try:
             result = subprocess.run(["node", str(cli), command, json.dumps(dict(payload), separators=(",", ":"))], capture_output=True, text=True, timeout=30, check=True)
-            return {"status": "REAL", "source": "Binance Skills Hub crypto-market-rank", "command": command, "timestamp": int(time.time() * 1000), "payload": json.loads(result.stdout), "methodology": "chain-specific Web3 rank context; not BTC Spot or Futures flow", "confidence": 0.7, "coverage": 1.0}
+            parsed = json.loads(result.stdout)
+            chain = parsed.get("chain") or parsed.get("chain_name") or payload.get("chain")
+            token = parsed.get("token") or parsed.get("symbol") or payload.get("token")
+            if not chain:
+                return unavailable("Binance Skills Hub", command, "payload did not identify chain; cannot call it BTC smart money")
+            return {"status": "REAL", "source": "Binance Skills Hub crypto-market-rank", "command": command, "timestamp": int(time.time() * 1000), "chain": chain, "token": token, "period": parsed.get("period") or payload.get("period"), "payload": parsed, "methodology": "chain-specific Web3 rank context; not BTC Spot or Futures flow", "confidence": 70, "coverage": 1.0}
         except Exception as exc:
             return unavailable("Binance Skills Hub", command, type(exc).__name__)
 
@@ -126,6 +143,26 @@ def institutional_state(delta_5d_btc: float | None, confidence: float | None) ->
     magnitude = abs(delta_5d_btc)
     state = "STRONG_INFLOW" if delta_5d_btc > 0 and magnitude > 1000 else "INFLOW" if delta_5d_btc > 0 else "STRONG_OUTFLOW" if delta_5d_btc < -1000 else "OUTFLOW" if delta_5d_btc < 0 else "NEUTRAL"
     return {"status": "DERIVED", "state": state, "delta_5d_btc": delta_5d_btc, "confidence": confidence, "methodology": "holdings delta; not direct net ETF cash flow"}
+
+
+def network_context(payload: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Classify only returned Coin Metrics values; absent fields remain unknown."""
+    if not payload or payload.get("status") not in {"REAL", "DERIVED"}:
+        return unavailable("Coin Metrics Community", "metadata-validated BTC daily network metrics", "no validated payload")
+    rows = (payload.get("payload") or {}).get("data", [])
+    if len(rows) < 2:
+        return unavailable("Coin Metrics Community", "daily BTC network context", "fewer than two observations")
+    latest, previous = rows[-1], rows[-2]
+    values = []
+    for key in ("TxCnt", "AdrActCnt", "FeeTotNtv"):
+        if latest.get(key) is not None and previous.get(key) is not None:
+            values.append(float(latest[key]) - float(previous[key]))
+    if not values:
+        return unavailable("Coin Metrics Community", "daily BTC network context", "selected metrics absent from payload")
+    positive = sum(x > 0 for x in values)
+    negative = sum(x < 0 for x in values)
+    state = "EXPANDING" if positive >= 2 else "CONTRACTING" if negative >= 2 else "MIXED" if positive and negative else "NEUTRAL"
+    return {"status": "DERIVED", "state": state, "strength": round(abs(sum(values)) / max(1, len(values)), 4), "confidence": payload.get("confidence"), "timeframe": "1d", "why": [f"{key} direction={('up' if float(latest[key]) > float(previous[key]) else 'down' if float(latest[key]) < float(previous[key]) else 'flat')}" for key in ("TxCnt", "AdrActCnt", "FeeTotNtv") if latest.get(key) is not None and previous.get(key) is not None], "methodology": "directional comparison of returned daily network metrics; secondary context only"}
 
 
 def classify_exchange_transaction(from_entity: str | None, to_entity: str | None, exchange_entity: str = "BINANCE") -> dict[str, Any]:

@@ -1,0 +1,55 @@
+{
+  "groups": {
+    "BASE": {
+      "15m": {
+        "median_mae": 0.0,
+        "median_mfe": 0.0,
+        "positive_return_rate": 0.4791666666666667
+      },
+      "multiple_testing_note": "Four predeclared context cuts; no post-hoc threshold search; small cells are not promoted to evidence",
+      "sample_size": 314,
+      "sufficient_sample": true
+    },
+    "FUTURES_CVD_DOWN": {
+      "15m": {
+        "median_mae": 0.0,
+        "median_mfe": 0.0,
+        "positive_return_rate": 0.5244755244755245
+      },
+      "multiple_testing_note": "Four predeclared context cuts; no post-hoc threshold search; small cells are not promoted to evidence",
+      "sample_size": 158,
+      "sufficient_sample": true
+    },
+    "HIGH_WHALE_BUY_EFFICIENCY": {
+      "15m": {
+        "median_mae": 0.0,
+        "median_mfe": 0.0,
+        "positive_return_rate": 0.5142857142857142
+      },
+      "multiple_testing_note": "Four predeclared context cuts; no post-hoc threshold search; small cells are not promoted to evidence",
+      "sample_size": 113,
+      "sufficient_sample": true
+    },
+    "OI_RISING": {
+      "15m": {
+        "median_mae": 0.0,
+        "median_mfe": 0.0,
+        "positive_return_rate": 0.47368421052631576
+      },
+      "multiple_testing_note": "Four predeclared context cuts; no post-hoc threshold search; small cells are not promoted to evidence",
+      "sample_size": 288,
+      "sufficient_sample": true
+    },
+    "ORDERBOOK_BID_ABSORPTION": {
+      "15m": {
+        "median_mae": null,
+        "median_mfe": null,
+        "positive_return_rate": null
+      },
+      "multiple_testing_note": "Four predeclared context cuts; no post-hoc threshold search; small cells are not promoted to evidence",
+      "sample_size": 0,
+      "sufficient_sample": false
+    }
+  },
+  "min_sample": 20
+}
