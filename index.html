@@ -180,6 +180,52 @@
         .decision-meta { color:#8b949e; font-size:.8rem; }
         .decision-refresh { background:#238636; border:1px solid #2ea043; color:#fff; padding:7px 12px; border-radius:5px; cursor:pointer; }
         .decision-refresh:hover { background:#2ea043; }
+        /* === Liquidity–Liquidation–Volume Probability Field === */
+        .mpf-shell { display:flex; flex-direction:column; gap:14px; }
+        .mpf-head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; background:linear-gradient(135deg,#101826,#161b22); border:1px solid #30363d; border-radius:10px; padding:18px; }
+        .mpf-kicker { color:#79c0ff; font-size:.72rem; letter-spacing:.14em; font-weight:800; }
+        .mpf-head h3 { margin:6px 0; color:#f0f6fc; }
+        .mpf-head p { color:#8b949e; margin:0; max-width:780px; line-height:1.45; }
+        .mpf-regime { min-width:190px; padding:12px; border:1px solid #30363d; border-radius:7px; background:#0d1117; }
+        .mpf-regime span { display:block; color:#8b949e; font-size:.72rem; }
+        .mpf-regime b { display:block; margin-top:6px; font-size:1.1rem; color:#f2cc60; }
+        .mpf-summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:10px; }
+        .mpf-card { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px; }
+        .mpf-card .mpf-label { color:#8b949e; font-size:.7rem; text-transform:uppercase; letter-spacing:.05em; }
+        .mpf-card .mpf-value { display:block; margin-top:5px; color:#f0f6fc; font-size:1.35rem; font-weight:800; }
+        .mpf-card .mpf-detail { color:#8b949e; font-size:.72rem; margin-top:4px; line-height:1.35; }
+        .mpf-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(260px,360px); gap:12px; align-items:start; }
+        .mpf-axis-card,.mpf-route-card { background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:12px; }
+        .mpf-axis-title { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; color:#c9d1d9; font-weight:700; }
+        .mpf-legend { color:#8b949e; font-size:.7rem; font-weight:400; }
+        .mpf-axis { display:flex; flex-direction:column; gap:4px; }
+        .mpf-row { display:grid; grid-template-columns:88px minmax(120px,1fr) minmax(145px,1.5fr); gap:8px; align-items:center; min-height:44px; padding:5px 6px; border:1px solid #21262d; border-radius:6px; background:#11161d; }
+        .mpf-row.current { border-color:#58a6ff; background:#132238; box-shadow:0 0 0 1px #58a6ff33; }
+        .mpf-price { font-weight:800; color:#f0f6fc; font-variant-numeric:tabular-nums; }
+        .mpf-price small { display:block; color:#8b949e; font-size:.65rem; font-weight:500; }
+        .mpf-bars { display:flex; height:26px; align-items:center; gap:3px; }
+        .mpf-bar { height:10px; min-width:2px; border-radius:3px; transition:width .3s ease; }
+        .mpf-attract { background:linear-gradient(90deg,#bc8cff,#8b5cf6); }
+        .mpf-access { background:linear-gradient(90deg,#39d353,#3fb950); }
+        .mpf-friction { background:linear-gradient(90deg,#f2cc60,#d29922); }
+        .mpf-row-meta { color:#8b949e; font-size:.68rem; line-height:1.35; }
+        .mpf-row-meta b { color:#c9d1d9; }
+        .mpf-up { color:#3fb950; } .mpf-down { color:#f85149; } .mpf-muted { color:#8b949e; }
+        .mpf-section-title { color:#c9d1d9; font-weight:700; margin:0 0 8px; }
+        .mpf-route { padding:10px; border:1px solid #30363d; border-radius:7px; margin-bottom:8px; background:#11161d; }
+        .mpf-route b { color:#58a6ff; }
+        .mpf-route .route-line { color:#f0f6fc; font-weight:700; margin:5px 0; line-height:1.5; }
+        .mpf-route .route-note { color:#8b949e; font-size:.72rem; line-height:1.4; }
+        .mpf-inputs { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; margin-top:10px; }
+        .mpf-input { border:1px solid #30363d; border-radius:6px; padding:8px; background:#161b22; }
+        .mpf-input span { display:block; color:#8b949e; font-size:.68rem; }
+        .mpf-input b { display:block; color:#c9d1d9; margin-top:3px; font-size:.82rem; }
+        .mpf-note { color:#8b949e; font-size:.73rem; line-height:1.45; border-left:3px solid #d29922; padding:8px 10px; background:#161b22; border-radius:4px; }
+        .mpf-table { width:100%; border-collapse:collapse; font-size:.75rem; }
+        .mpf-table th,.mpf-table td { padding:6px 5px; border-bottom:1px solid #30363d; text-align:left; }
+        .mpf-table th { color:#8b949e; font-weight:600; }
+        .mpf-source { color:#8b949e; font-size:.68rem; }
+        @media (max-width:760px) { .mpf-head { flex-direction:column; } .mpf-regime { min-width:0; width:100%; } .mpf-layout { grid-template-columns:1fr; } .mpf-row { grid-template-columns:74px minmax(90px,1fr) minmax(120px,1.5fr); gap:5px; } .mpf-row-meta { font-size:.62rem; } }
         @media (max-width:600px) { .decision-table { font-size:.78rem; } .decision-table th,.decision-table td { padding:6px 4px; } }
         #hovaHistory { margin-top: 10px; }
         #hovaHistory ul { list-style: none; padding-left: 0; max-height: 150px; overflow-y: auto; border: 1px solid #30363d; border-radius: 5px; padding: 8px; background-color: #161b22;}
@@ -340,10 +386,11 @@
         function archiveCollectorTail(){}
         var pan = {vol:true,del:true,nai:true};
         var ind = {vwap:true,poc:true,hvn:false,lvn:false,vah:true,val:true,valueArea:true,bb:false,volumeProfile:false,marketProfile:false};
-        var structureInd = {hh:true,hl:true,lh:false,ll:false,bos:true,choch:true,msb:true,bullishOB:true,bearishOB:true,breaker:true,mtf:true,pd:true};
+        var structureInd = {hh:true,hl:true,lh:false,ll:false,bos:true,choch:true,msb:true,bullishOB:true,bearishOB:true,breaker:true,absorption:true,mtf:true,pd:true};
         try { Object.assign(ind, JSON.parse(localStorage.getItem('nceIndicators') || '{}')); Object.assign(structureInd, JSON.parse(localStorage.getItem('nceStructureIndicators') || '{}')); } catch (e) { console.warn('indicator state restore skipped', e); }
-        var STRUCTURE_LABELS = {hh:'HH',hl:'HL',lh:'LH',ll:'LL',bos:'BOS',choch:'CHoCH',msb:'MSB',bullishOB:'Bull OB',bearishOB:'Bear OB',breaker:'Breaker',mtf:'MTF H/L',pd:'P/D EQ'};
-        var STRUCTURE_COLORS = {hh:'#3fb950',hl:'#3fb950',lh:'#f85149',ll:'#f85149',bos:'#3fb950',choch:'#3fb950',msb:'#bc8cff',bullishOB:'#3fb950',bearishOB:'#f85149',breaker:'#d29922',mtf:'#79c0ff',pd:'#d29922'};
+        var structureViewportRestorePending = false;
+        var STRUCTURE_LABELS = {hh:'HH',hl:'HL',lh:'LH',ll:'LL',bos:'BOS',choch:'CHoCH',msb:'MSB',bullishOB:'Bull OB',bearishOB:'Bear OB',breaker:'Breaker',absorption:'Absorption',mtf:'MTF H/L',pd:'P/D EQ'};
+        var STRUCTURE_COLORS = {hh:'#3fb950',hl:'#3fb950',lh:'#f85149',ll:'#f85149',bos:'#3fb950',choch:'#3fb950',msb:'#bc8cff',bullishOB:'#3fb950',bearishOB:'#f85149',breaker:'#d29922',absorption:'#f2cc60',mtf:'#79c0ff',pd:'#d29922'};
         var IND_COLORS = {vwap:'#58a6ff',poc:'#f85149',hvn:'#f59e0b',lvn:'#a371f7',vah:'#3fb950',val:'#ef5350',bb:'#d29922',volumeProfile:'#8b949e',marketProfile:'#f2cc60'};
         var chart,cs,vs,bs,ss,guide50,guide70,guide85;
         var overlaySeries={vwap:null,bbU:null,bbM:null,bbL:null,valueArea:null}, overlayLines=[], profileBox=null;
@@ -834,6 +881,163 @@
         }
         function refreshDecisionPanel(){ if (panelFromUrl()==='Long/Short Skoru') setTab('Long/Short Skoru', true); }
 
+        /*
+         * Market Pressure / Probability Field
+         * ------------------------------------
+         * The browser deliberately keeps the layers separate until the final
+         * render: order book = path friction, profile = market memory,
+         * liquidations = forced-flow potential, flow = current alignment.
+         * Missing feeds are omitted from weighted averages instead of being
+         * treated as neutral or being filled with synthetic numbers.
+         */
+        function mpClamp(x, lo, hi){ return Math.max(lo, Math.min(hi, Number(x)||0)); }
+        function mpFinite(x){ var n=Number(x); return isFinite(n) ? n : null; }
+        function mpPrice(x){
+          if (x == null) return null;
+          if (typeof x === 'number' || typeof x === 'string') return mpFinite(x);
+          if (typeof x !== 'object') return null;
+          return mpFinite(x.price_mid != null ? x.price_mid : (x.price_level != null ? x.price_level : (x.price != null ? x.price : (x.mid != null ? x.mid : (x.level != null ? x.level : null)))));
+        }
+        function mpStatus(x){ return String((x && x.status) || 'UNAVAILABLE').toUpperCase(); }
+        function mpHas(x){ return !!x && mpStatus(x) !== 'UNAVAILABLE' && mpStatus(x).indexOf('INSUFFICIENT') < 0 && mpStatus(x) !== 'ERROR'; }
+        function mpOptional(url, source, tf){
+          return apiGet(url, {timeframe:tf, symbol:SYMBOL}).then(function(x){ return x || {status:'UNAVAILABLE',source:source}; }).catch(function(e){ return {status:'UNAVAILABLE',source:source,warning:source+' unavailable'}; });
+        }
+        function mpPublic(url, source){
+          return fetch(url, {signal:AbortSignal.timeout(7000)}).then(function(r){ if(!r.ok) throw Error('HTTP '+r.status); return r.json(); }).then(function(x){ return Object.assign({status:'PASS',source:source}, x || {}); }).catch(function(){ return {status:'UNAVAILABLE',source:source,warning:source+' unavailable'}; });
+        }
+        function loadProbabilityField(tf){
+          var q=encodeURIComponent(tf), s=encodeURIComponent(SYMBOL);
+          return Promise.all([
+            mpOptional('/api/v1/probability?tf='+q, 'Historical probability', tf),
+            mpOptional('/api/v1/liquidity/state?tf='+q, 'Structural liquidity', tf),
+            mpOptional('/api/v1/profile/state?tf='+q, 'Volume profile', tf),
+            mpOptional('/api/v1/orderflow/state?tf='+q, 'Order flow', tf),
+            loadMoneyFlowLocal(tf),
+            mpOptional('/api/v1/derivatives/context?tf='+q, 'Derivatives / liquidation context', tf),
+            mpOptional('/api/v1/market/derivatives?symbol='+s, 'Live derivatives snapshot', tf),
+            mpPublic(SCORE_FAPI+'/depth?symbol='+s+'&limit=50', 'Binance Futures order book'),
+            mpPublic(SCORE_FAPI+'/ticker/bookTicker?symbol='+s, 'Binance Futures book ticker'),
+            mpPublic(SCORE_FAPI+'/premiumIndex?symbol='+s, 'Binance Futures funding')
+          ]).then(function(a){
+            return {status:'DERIVED',time_utc:new Date().toISOString(),symbol:SYMBOL,timeframe:tf,
+              probability:a[0],liquidity:a[1],profile:a[2],orderflow:a[3],money_flow:a[4],
+              derivatives:a[5],market_derivatives:a[6],depth:a[7],book_ticker:a[8],funding:a[9],
+              methodology:'Attraction × Accessibility × Flow alignment; source weights renormalize when feeds are unavailable.'};
+          });
+        }
+        function mpWeighted(items){
+          var sum=0, weight=0, used=0;
+          (items||[]).forEach(function(x){ if(x && x.value != null && isFinite(Number(x.value))){ sum += Number(x.value)*Number(x.weight||0); weight += Number(x.weight||0); used++; } });
+          return {value:weight ? mpClamp(sum/weight,0,100) : null, used:used, total:(items||[]).length};
+        }
+        function mpObservedPrice(d){
+          var bt=d.book_ticker||{}, md=d.market_derivatives||{}, snap=md.bookTicker||md.book_ticker||{};
+          var bid=mpFinite(bt.bidPrice != null ? bt.bidPrice : snap.bidPrice), ask=mpFinite(bt.askPrice != null ? bt.askPrice : snap.askPrice);
+          if (bid != null && ask != null) return (bid+ask)/2;
+          return mpFinite(headerPrice) || mpFinite(md.markPrice) || mpFinite(md.mark_price);
+        }
+        function mpNodePrice(x){ return mpPrice(x); }
+        function mpMakeLevels(d, current){
+          var out=[], seen={};
+          function add(price,label,kind,weight,side,source,notional){
+            price=mpFinite(price); if(price==null || price<=0) return;
+            var key=(Math.round(price*100)/100).toFixed(2); if(seen[key]){ seen[key].labels.push(label); return; }
+            var item={price:price,label:label,kind:kind||'level',weight:mpClamp(weight==null?.5:weight,0,1),side:side||((current!=null&&price>=current)?'up':'down'),source:source||'unknown',notional:mpFinite(notional),labels:[label]};
+            seen[key]=item; out.push(item);
+          }
+          var p=d.profile||{}, pp=p.profile||{};
+          var poc=mpNodePrice(pp.poc); if(poc!=null) add(poc,'POC','profile',1,null,'Volume profile');
+          if(pp.vah!=null) add(pp.vah,'VAH','profile',.75,'up','Value area');
+          if(pp.val!=null) add(pp.val,'VAL','profile',.75,'down','Value area');
+          (p.hvn||[]).slice(0,5).forEach(function(x){ add(mpNodePrice(x),'HVN','profile',.82,null,'Volume profile',x.volume); });
+          (p.lvn||[]).slice(0,5).forEach(function(x){ add(mpNodePrice(x),'LVN','profile',.45,null,'Volume profile',x.volume); });
+          var ll=d.liquidity||{}, lev=ll.levels||{};
+          if(lev.nearby_swing_high!=null) add(lev.nearby_swing_high,'Swing high','structure',.9,'up','Liquidity map');
+          if(lev.nearby_swing_low!=null) add(lev.nearby_swing_low,'Swing low','structure',.9,'down','Liquidity map');
+          function clusters(src){
+            if(!src || typeof src!=='object') return [];
+            return (src.liquidation_clusters||src.liquidations||src.clusters||src.pools||[]);
+          }
+          var allClusters=clusters(d.derivatives).concat(clusters(d.market_derivatives));
+          allClusters.forEach(function(x){
+            var side=String(x.side||x.position_side||'').toLowerCase(), price=mpNodePrice(x), notional=mpFinite(x.notional_usd!=null?x.notional_usd:(x.notional!=null?x.notional:(x.size!=null?x.size:x.qty)));
+            add(price,side==='long'?'LONG LIQUIDATION':'SHORT LIQUIDATION','liquidation',mpClamp((notional||0)/1000000,.35,1),side==='long'?'down':'up','Liquidation feed',notional);
+          });
+          var depth=d.depth||{}, bids=Array.isArray(depth.bids)?depth.bids:[], asks=Array.isArray(depth.asks)?depth.asks:[];
+          bids.slice(0,14).forEach(function(x){ var px=mpFinite(x&&x[0]), qty=mpFinite(x&&x[1]); add(px,'Bid liquidity','orderbook',.35,'down','Binance order book',px!=null&&qty!=null?px*qty:null); });
+          asks.slice(0,14).forEach(function(x){ var px=mpFinite(x&&x[0]), qty=mpFinite(x&&x[1]); add(px,'Ask liquidity','orderbook',.35,'up','Binance order book',px!=null&&qty!=null?px*qty:null); });
+          return out.filter(function(x){ return current==null || Math.abs(x.price-current)/current < .12; }).sort(function(a,b){ return b.price-a.price; }).slice(0,28);
+        }
+        function mpDepthScore(d, current, target){
+          var depth=d.depth||{}, rows=target>=current?(Array.isArray(depth.asks)?depth.asks:[]):(Array.isArray(depth.bids)?depth.bids:[]);
+          if(!rows.length) return null;
+          var max=0,total=0,near=0;
+          rows.slice(0,20).forEach(function(x){ var px=mpFinite(x&&x[0]), qty=mpFinite(x&&x[1]), n=px!=null&&qty!=null?px*qty:0; max=Math.max(max,n); if(px!=null && ((target>=current&&px<=target)||(target<current&&px>=target))){ total+=n; near=Math.max(near,n); } });
+          if(!max) return 50;
+          return mpClamp(100-(total/(max*8))*100,5,95);
+        }
+        function mpFlowInputs(d, direction){
+          var of=(d.orderflow||{}).observations||{}, delta=mpFinite(of.aggression_balance_pct), priceMove=mpFinite(of.price_change_pct);
+          var money=d.money_flow||{}, spot=money.spot&&money.spot.value||{}, fut=money.futures&&money.futures.value||{};
+          var cap=mpFinite(spot.delta_usd!=null?spot.delta_usd:(fut.delta_usd!=null?fut.delta_usd:null));
+          var sign=direction==='up'?1:-1;
+          var flow=delta==null?null:mpClamp(50+sign*delta*1.5,0,100);
+          var capFlow=cap==null?null:mpClamp(50+sign*(cap/(Math.abs(cap)+1))*50,0,100);
+          var momentum=priceMove==null?null:mpClamp(50+sign*priceMove*10,0,100);
+          return {flow:flow,capital:capFlow,momentum:momentum,delta:delta,priceMove:priceMove};
+        }
+        function mpScoreLevel(level,d,current,prob){
+          var direction=level.price>=current?'up':'down', fi=mpFlowInputs(d,direction), p=prob.probability||{}, hist=mpFinite(direction==='up'?p.up:p.down);
+          var profileScore=level.kind==='profile'?level.weight*100:null, structureScore=level.kind==='structure'?level.weight*100:null, liqScore=level.kind==='liquidation'?level.weight*100:null;
+          if(level.kind==='orderbook') structureScore=level.weight*100;
+          var attraction=mpWeighted([{value:liqScore,weight:.35},{value:profileScore,weight:.25},{value:structureScore,weight:.20},{value:hist,weight:.20}]);
+          var book=mpDepthScore(d,current,level.price), position=null, vol=null;
+          var ctx=(d.derivatives||{}).context||{}, oi=String(ctx.open_interest_proxy||'').toLowerCase(), squeeze=String(ctx.liquidation_squeeze_proxy||'').toLowerCase();
+          if(oi) position=oi==='expansion'?(direction==='up'?55:45):50;
+          if(squeeze) position=squeeze.indexOf(direction==='up'?'short':'long')>=0?75:35;
+          var access=mpWeighted([{value:fi.flow,weight:.25},{value:book,weight:.20},{value:fi.momentum,weight:.15},{value:vol,weight:.10},{value:position,weight:.15},{value:fi.capital,weight:.15}]);
+          var friction=0;
+          if(level.kind==='profile') friction += level.label==='POC'?35:24;
+          if(level.kind==='orderbook') friction += 28;
+          if(book!=null) friction += (100-book)*.22;
+          friction=mpClamp(friction,0,100);
+          var finalAccess=access.value==null?null:access.value*(1-friction/100);
+          var flowAlignment=mpWeighted([{value:fi.flow,weight:.55},{value:fi.capital,weight:.45}]);
+          var potential=(attraction.value!=null&&finalAccess!=null&&flowAlignment.value!=null&&hist!=null)?attraction.value*(finalAccess/100)*(flowAlignment.value/100)*(hist/100):null;
+          return Object.assign(level,{direction:direction,attraction:attraction.value,accessibility:finalAccess,friction:friction,flowAlignment:flowAlignment.value,historical:hist,potential:potential,coverage:{attraction:attraction.used+'/'+attraction.total,access:access.used+'/'+access.total}});
+        }
+        function mpPct(x){ return x==null?'—':fmtNum(x,0)+'%'; }
+        function mpSourceHealth(d){
+          var list=[['Profile',d.profile],['Liquidity',d.liquidity],['Order flow',d.orderflow],['Capital flow',d.money_flow],['Derivatives',d.derivatives],['Order book',d.depth]];
+          return list.map(function(x){ var ok=mpHas(x[1]); return '<span class="mpf-input"><span>'+esc(x[0])+'</span><b class="'+(ok?'mpf-up':'mpf-muted')+'">'+(ok?'AVAILABLE':'UNAVAILABLE')+'</b></span>'; }).join('');
+        }
+        function probabilityFieldView(d){
+          var prob=d.probability||{}, current=mpObservedPrice(d), levels=mpMakeLevels(d,current), scored=[];
+          if(current!=null) scored=levels.map(function(x){ return mpScoreLevel(x,d,current,prob); });
+          var up=scored.filter(function(x){return x.direction==='up'&&x.potential!=null;}).sort(function(a,b){return b.potential-a.potential;});
+          var down=scored.filter(function(x){return x.direction==='down'&&x.potential!=null;}).sort(function(a,b){return b.potential-a.potential;});
+          var upBest=up[0], downBest=down[0], upSum=up.reduce(function(n,x){return n+x.potential;},0), downSum=down.reduce(function(n,x){return n+x.potential;},0), first=(upSum+downSum)?upSum/(upSum+downSum)*100:null;
+          var dir=upSum>downSum?'UP':(downSum>upSum?'DOWN':'WAIT'), best=dir==='UP'?upBest:(dir==='DOWN'?downBest:null);
+          var historical=prob.probability||{}, marketDir=prob.prediction==='up'?'UP':(prob.prediction==='down'?'DOWN':'RANGE');
+          function scoreBar(cls,v){ return '<span class="mpf-bar '+cls+'" style="width:'+mpClamp(v==null?0:v,0,100)+'%"></span>'; }
+          function row(x){
+            var isCurrent=current!=null&&Math.abs(x.price-current)/current<.0008;
+            return '<div class="mpf-row '+(isCurrent?'current':'')+'"><div class="mpf-price">$'+fmtNum(x.price,2)+'<small>'+esc(isCurrent?'CURRENT':x.labels.join(' · '))+'</small></div><div class="mpf-bars" title="Attraction / Accessibility / Friction">'+scoreBar('mpf-attract',x.attraction)+scoreBar('mpf-access',x.accessibility)+scoreBar('mpf-friction',x.friction)+'</div><div class="mpf-row-meta"><b>'+esc(x.direction==='up'?'↑ '+x.label:'↓ '+x.label)+'</b> · Potential <b>'+mpPct(x.potential)+'</b><br>Attraction '+mpPct(x.attraction)+' · Access '+mpPct(x.accessibility)+' · Friction '+mpPct(x.friction)+'<br><span class="mpf-source">'+esc(x.source)+' · '+esc(x.coverage.attraction)+' attraction inputs / '+esc(x.coverage.access)+' access inputs</span></div></div>'; }
+          var axis=scored.length?scored.sort(function(a,b){return b.price-a.price;}).slice(0,24).map(row).join(''):'<div class="mpf-note">Fiyat ekseni oluşturulamadı; güncel fiyat veya profile/order book seviyeleri mevcut değil.</div>';
+          function route(x,label){ return '<div class="mpf-route"><b>'+esc(label)+'</b><div class="route-line">'+(x?'$'+fmtNum(x.price,2)+' · '+esc(x.label)+' · target potential '+mpPct(x.potential):'UNAVAILABLE')+'</div><div class="route-note">'+(x?'Attraction '+mpPct(x.attraction)+' · Accessibility '+mpPct(x.accessibility)+' · Friction '+mpPct(x.friction):'Bu yönde yeterli gerçek kaynak bulunamadı.')+'</div></div>'; }
+          var sourceCount=[d.profile,d.liquidity,d.orderflow,d.money_flow,d.derivatives,d.depth].filter(mpHas).length;
+          var baseProb=historical.up!=null||historical.down!=null?('Historical closed-outcome bias: '+mpPct(historical.up)+' up / '+mpPct(historical.down)+' down / '+mpPct(historical.range)+' range'): 'Historical calibration UNAVAILABLE';
+          var html='<div class="mpf-shell">';
+          html+='<div class="mpf-head"><div><div class="mpf-kicker">LIQUIDITY–LIQUIDATION–VOLUME PROBABILITY FIELD</div><h3>Tek fiyat ekseninde Market Pressure</h3><p>Order Book bekleyen niyeti, Volume Profile piyasa hafızasını, Liquidation zorunlu akış potansiyelini; Order Flow ve Capital Flow ise mevcut yön teyidini taşır. Attraction “neden orası?”, Accessibility “oraya yol açık mı?” sorusunu cevaplar.</p></div><div class="mpf-regime"><span>PRIMARY ROUTE BIAS</span><b class="'+(dir==='UP'?'mpf-up':(dir==='DOWN'?'mpf-down':'mpf-muted'))+'">'+esc(dir)+'</b><span style="margin-top:8px">Historical model</span><b style="font-size:.9rem">'+esc(marketDir)+'</b></div></div>';
+          html+='<div class="mpf-summary"><div class="mpf-card"><span class="mpf-label">Current price</span><span class="mpf-value">'+(current!=null?'$'+fmtNum(current,2):'—')+'</span><div class="mpf-detail">'+esc(SYMBOL)+' · '+esc(d.timeframe||curTF)+'</div></div><div class="mpf-card"><span class="mpf-label">Best attraction</span><span class="mpf-value">'+(best?mpPct(best.attraction):'—')+'</span><div class="mpf-detail">'+(best?esc(best.label)+' @ $'+fmtNum(best.price,2):'No target candidate')+'</div></div><div class="mpf-card"><span class="mpf-label">Accessibility</span><span class="mpf-value">'+(best?mpPct(best.accessibility):'—')+'</span><div class="mpf-detail">Final access after path friction</div></div><div class="mpf-card"><span class="mpf-label">First-hit score</span><span class="mpf-value">'+(first!=null?mpPct(dir==='UP'?first:100-first):'—')+'</span><div class="mpf-detail">Model score, not calibrated probability</div></div><div class="mpf-card"><span class="mpf-label">Data coverage</span><span class="mpf-value">'+sourceCount+'/6</span><div class="mpf-detail">'+esc(baseProb)+'</div></div></div>';
+          html+='<div class="mpf-layout"><div class="mpf-axis-card"><div class="mpf-axis-title"><span>COMMON PRICE AXIS</span><span class="mpf-legend">purple Attraction · green Accessibility · yellow Friction</span></div><div class="mpf-axis">'+axis+'</div></div><div class="mpf-route-card"><div class="mpf-section-title">Expected route</div>'+route(upBest,'UPPER TARGET')+route(downBest,'LOWER TARGET')+'<div class="mpf-section-title" style="margin-top:14px">Field inputs</div><div class="mpf-inputs">'+mpSourceHealth(d)+'</div><div class="mpf-note" style="margin-top:10px">Ağırlıklar V1 başlangıç ağırlıklarıdır; backtest ile kalibre edilmelidir. Ham score olasılık değildir. Execution yetkisi vermez.</div></div></div>';
+          var flow=(d.orderflow||{}).observations||{}, ctx=(d.derivatives||{}).context||{}, mf=d.money_flow||{};
+          html+='<div class="mpf-card"><span class="mpf-label">Force / flow separation</span><div class="mpf-inputs"><span class="mpf-input"><span>Order Flow delta</span><b>'+ (flow.aggression_balance_pct!=null?fmtNum(flow.aggression_balance_pct,2)+'%':'UNAVAILABLE')+'</b></span><span class="mpf-input"><span>Price response</span><b>'+ (flow.price_change_pct!=null?fmtNum(flow.price_change_pct,3)+'%':'UNAVAILABLE')+'</b></span><span class="mpf-input"><span>OI context</span><b>'+esc(ctx.open_interest_proxy||'UNAVAILABLE')+'</b></span><span class="mpf-input"><span>Squeeze context</span><b>'+esc(ctx.liquidation_squeeze_proxy||'UNAVAILABLE')+'</b></span><span class="mpf-input"><span>Funding</span><b>'+ (d.funding&&d.funding.lastFundingRate!=null?fmtNum(Number(d.funding.lastFundingRate)*100,4)+'%':'UNAVAILABLE')+'</b></span><span class="mpf-input"><span>Capital regime</span><b>'+esc((mf.diagnosis&&mf.diagnosis.regime)||'UNAVAILABLE')+'</b></span></div></div>';
+          html+='<div class="mpf-source">Updated '+esc(d.time_utc||'UNKNOWN')+' · '+esc(d.methodology||'Derived field')+' · Liquidation levels are shown only when a verified liquidation-cluster source is present.</div></div>';
+          return html;
+        }
+
         function terminalView(name, j) {
           var pstatus = payloadStatus(j);
           var html = responseStatus(j) + '<div class="term-grid">';
@@ -852,6 +1056,8 @@
           } else if (name === 'Real Trading / Paper') {
             return realTradingPaperView(j);
           } else if (name === 'Olasılık Haritası') {
+            return probabilityFieldView(j);
+            /* Legacy calibrated view retained below for reference/backward compatibility. */
             var prob = j.probability || {}, met = j.metrics || {}, proof = j.no_lookahead_proof || {}, rules = j.rules || {};
             if (j.status !== 'PASS') {
               html += card('Calibration status', esc((j.status||'UNKNOWN') + ' — insufficient/error payload'), 'backend-bad');
@@ -989,7 +1195,7 @@
           var map = {
             'Trader Hova': function() { return requestJson('/api/v1/hova/chat', { method: 'POST', requestSeq: panelRequestSeq, timeframe: tf, symbol: SYMBOL, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'terminal_state', timeframe: tf, source: 'website' }) }); },
             'Long/Short Skoru': function() { return fetchRealDecision(tf); },
-            'Olasılık Haritası': function() { return apiGet('/api/v1/probability?tf=' + encodeURIComponent(tf)); },
+            'Olasılık Haritası': function() { return loadProbabilityField(tf); },
             'Order Flow': function() { return apiGet('/api/v1/orderflow/state?tf=' + encodeURIComponent(tf)); },
             'Money Flow': function() { return loadMoneyFlowLocal(tf); },
             'Likidite ve Liquidation Haritası': function() { return loadLiquidityMapLocal(tf).catch(function(e){ console.warn('orderbook liquidity failed', e && e.message || e); return Promise.all([apiGet('/api/v1/liquidity/state?tf=' + encodeURIComponent(tf)), apiGet('/api/v1/microstructure/state?tf=' + encodeURIComponent(tf)), apiGet('/api/v1/derivatives/context?tf=' + encodeURIComponent(tf))]).then(function(a){ return { status: a[0].status, time_utc: a[0].time_utc, symbol: a[0].symbol, timeframe: a[0].timeframe, liquidity: a[0], microstructure: a[1], derivatives: a[2], warning: 'Orderbook depth unavailable; showing backend proxy liquidity.' }; }); }); },
@@ -1055,7 +1261,7 @@
         function marketStructureMarkers(list) {
           var rows = closedBars(list), markers = [], zones = [], breaks = [], highs = [], lows = [], left = 2, right = 2;
           if (rows.length < 12) return {markers:markers,zones:zones};
-          function marker(x, key, position, shape) { if (structureInd[key]) markers.push({time:x.t,position:position,color:STRUCTURE_COLORS[key],shape:shape||'circle',text:STRUCTURE_LABELS[key],size:1}); }
+          function marker(x, key, position, shape, text) { if (structureInd[key]) markers.push({time:x.t,position:position,color:STRUCTURE_COLORS[key],shape:shape||'circle',text:text||STRUCTURE_LABELS[key],size:1}); }
           for (var i=left;i<rows.length-right;i++) {
             var isHigh=true,isLow=true;
             for (var a=1;a<=left;a++) { isHigh=isHigh&&rows[i].h>=rows[i-a].h; isLow=isLow&&rows[i].l<=rows[i-a].l; }
@@ -1109,8 +1315,10 @@
               var invalid=z.type==='long'?current.c<z.low:current.c>z.high;
               if (invalid) { z.invalidated=true; if (structureInd.breaker) marker(current,'breaker',z.type==='long'?'aboveBar':'belowBar','square'); }
             });
+            if (current.naiBuyAbsorption) marker(current,'absorption','belowBar','circle','BA');
+            if (current.naiSellAbsorption) marker(current,'absorption','aboveBar','circle','SA');
           }
-          return {markers:markers,zones:activeZones.filter(function(x){return !x.invalidated;}),breaks:breaks,highs:highs,lows:lows};
+          return {markers:markers,zones:activeZones.filter(function(x){return !x.invalidated;}),breaks:breaks,highs:highs,lows:lows,absorption:rows.filter(function(x){return x.naiBuyAbsorption||x.naiSellAbsorption;}).map(function(x){return {time:x.t,buy:!!x.naiBuyAbsorption,sell:!!x.naiSellAbsorption};})};
         }
 
         function resetOverlays(){
@@ -1184,7 +1392,13 @@
  }
  }
         function toggleInd(k){ ind[k]=!ind[k]; localStorage.setItem('nceIndicators',JSON.stringify(ind)); updBar(); if (curData.length) updateOverlays(curData); }
-        function toggleStructure(k){ structureInd[k]=!structureInd[k]; localStorage.setItem('nceStructureIndicators',JSON.stringify(structureInd)); updBar(); if (curData.length) setSeries(curData, curTF); }
+        function structureStateKey(tf){ return 'nceStructureIndicators-v2-' + SYMBOL + '-' + (tf || curTF); }
+        function restoreStructureState(tf){ var base={hh:true,hl:true,lh:false,ll:false,bos:true,choch:true,msb:true,bullishOB:true,bearishOB:true,breaker:true,absorption:true,mtf:true,pd:true}; try { Object.assign(base, JSON.parse(localStorage.getItem('nceStructureIndicators') || '{}')); Object.assign(base, JSON.parse(localStorage.getItem(structureStateKey(tf)) || '{}')); } catch(e){} structureInd=base; }
+        function saveStructureState(){ localStorage.setItem('nceStructureIndicators',JSON.stringify(structureInd)); localStorage.setItem(structureStateKey(curTF),JSON.stringify(structureInd)); }
+        function toggleStructure(k){ structureInd[k]=!structureInd[k]; saveStructureState(); updBar(); if (curData.length) setSeries(curData, curTF); }
+        function viewportStateKey(tf){ return 'nceChartViewport-v2-' + SYMBOL + '-' + (tf || curTF); }
+        function saveViewport(tf, range){ if (!range || !isFinite(range.from) || !isFinite(range.to)) return; try { localStorage.setItem(viewportStateKey(tf),JSON.stringify({range:range,follow:followLive,locked:viewportLock})); } catch(e){} }
+        function restoreViewport(tf, len){ try { var saved=JSON.parse(localStorage.getItem(viewportStateKey(tf))||'null'); if (!saved || !saved.range) return false; chart.timeScale().setVisibleLogicalRange({from:Math.max(-1,saved.range.from),to:Math.min(len+5,saved.range.to)}); followLive=!!saved.follow; viewportLock=!!saved.locked || !saved.follow; userScrolled=viewportLock; return true; } catch(e){ return false; } }
         function ema(prev, val, len){ var a = 2 / (len + 1); return prev == null ? val : (prev + a * (val - prev)); }
         function rma(prev, val, len){ return prev == null ? val : (((prev * (len - 1)) + val) / len); }
         function clamp(x, lo, hi){ return Math.max(lo, Math.min(hi, x)); }
@@ -1196,7 +1410,7 @@
         function isAtRightEdge(len){ var r = chart.timeScale().getVisibleLogicalRange(); return !r || r.to >= len - 3; }
         function applyViewport(tf, len, force){ if (!len) return; if (!force && (!followLive || viewportLock)) return; var bars = Math.min(visibleBars(tf), len); chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, len - bars) - 1, to: len + 5 }); }
         function goLive(){ viewportLock = false; followLive = true; userScrolled = false; applyViewport(curTF, curData.length, true); document.getElementById('liveBtn').style.opacity = '1'; }
-        function trackViewport(){ chart.timeScale().subscribeVisibleLogicalRangeChange(function(r){ if (!r || !curData.length) return; if (!viewportLock) followLive = r.to >= curData.length - 3; document.getElementById('liveBtn').style.opacity = followLive && !viewportLock ? '1' : '0.55'; }); }
+        function trackViewport(){ chart.timeScale().subscribeVisibleLogicalRangeChange(function(r){ if (!r || !curData.length) return; if (!viewportLock) followLive = r.to >= curData.length - 3; saveViewport(curTF,r); document.getElementById('liveBtn').style.opacity = followLive && !viewportLock ? '1' : '0.55'; }); }
         function trackManualViewport(){
           var el=document.getElementById('ct'); if (!el) return;
           el.addEventListener('pointerdown',function(e){ viewportPointer={x:e.clientX,y:e.clientY}; });
@@ -1361,7 +1575,8 @@
           updateOverlays(list, structureState);
           resizeC();
           drawingRender();
-          if (wasFollowingLive) applyViewport(tf || curTF, list.length, false);
+          if (structureViewportRestorePending && restoreViewport(tf || curTF, list.length)) { structureViewportRestorePending=false; }
+          else if (wasFollowingLive) applyViewport(tf || curTF, list.length, false);
           else if (preservedRange) {
             try { chart.timeScale().setVisibleLogicalRange(preservedRange); } catch (e) { console.warn('viewport restore skipped', e && e.message || e); }
           }
@@ -1381,7 +1596,7 @@
         function intervalFor(tf){ return {'1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m', '1h': '1h', '4h': '4h', '1D': '1d', '3D': '3d'}[tf]; }
         function openKlineSocket(tf){ if (!ENABLE_LIVE || tf === '1s') return; var intv = intervalFor(tf); if (!intv) return; var tag = tf, bases = [WS_KLINE_BASE, WS_KLINE_FALLBACK_BASE], bi = wsBaseIndex[tag] || 0; lastWsUrl = bases[bi] + 'btcusdt@kline_' + intv; wsState = 'CONNECTING'; setWsLabel(); wsMsgSeen[tag] = false; wsKline = new WebSocket(lastWsUrl); var idle = setTimeout(function(){ if (curTF === tag && wsKline && !wsMsgSeen[tag]) { wsBaseIndex[tag] = (bi + 1) % bases.length; try { wsKline.close(); } catch(e){} } }, 12000); wsKline.onopen = function(){ reconnectDelay[tag] = 1000; wsState = 'OPEN'; setWsLabel(); }; wsKline.onmessage = function(e){ try { wsMsgSeen[tag] = true; clearTimeout(idle); var d = JSON.parse(e.data), bar = wsKlineToBar(d); if (curTF !== tag) return; if (tag === '3D') { loadFromBinance('3D'); return; } upsertBar(bar); if (bar.closed) archiveCollector('binance_ws_kline_' + tag, tag, [bar]); } catch(err) { console.error('kline ws parse', err); } }; wsKline.onerror = function(){ wsState = 'ERROR'; setWsLabel(); }; wsKline.onclose = function(){ clearTimeout(idle); if (curTF !== tag || !ENABLE_LIVE) return; wsState = 'RECONNECT'; setWsLabel(); var delay = reconnectDelay[tag] || 1000; reconnectDelay[tag] = Math.min(delay * 2, 30000); reconnectTimers[tag] = setTimeout(function(){ openKlineSocket(tag); }, delay); }; }
         function attach1mAbsorptionSummary(rows){ return fetch('data/bars_1s.json?ts='+Date.now()).then(function(r){ return r.ok ? r.json() : []; }).then(function(one){ archiveCollectorTail('local_absorption_seed_1s','1s',one.map(normalizeBar),1200); var calc=calcNAI(one), m={}; calc.forEach(function(x){ if(!x.closed)return; var key=Math.floor(x.t/60)*60; m[key]=m[key]||{ba:0,sa:0}; if(x.naiBuyAbsorption)m[key].ba++; if(x.naiSellAbsorption)m[key].sa++; }); rows.forEach(function(r){ var z=m[Math.floor(r.t/60)*60]; if(z){r.nai1sBASeconds=z.ba||0;r.nai1sSASeconds=z.sa||0;} }); return rows; }).catch(function(){ return rows; }); }
-        function loadTF(tf, fromHistory){ try { console.log('LOADTF START', tf, loadSeq, Date.now()); curTF = tf || curTF || '1D'; tf = curTF; var seq = ++loadSeq; console.log('LOADTF SEQ', seq, tf, Date.now()); localStorage.setItem('nceCurrentTF', curTF); try { var tfUrl = new URL(window.location.href); tfUrl.searchParams.set('tf', curTF); var currentPanel = panelFromUrl(); if (currentPanel) tfUrl.searchParams.set('panel', currentPanel); if (fromHistory) window.history.replaceState({panel: currentPanel || 'Grafik', tf: curTF}, '', tfUrl.toString()); else if (tfFromUrl() !== curTF) window.history.pushState({panel: currentPanel || 'Grafik', tf: curTF}, '', tfUrl.toString()); } catch (urlError) {} document.querySelectorAll('#tf button').forEach(function(b){ b.classList.toggle('on', b.textContent === curTF); }); var mpEl = document.getElementById('mp'); if (mpEl) mpEl.innerHTML = '<b>' + tfText(curTF) + '</b>'; syncInstantPrice(); closeSockets(); lastWsUrl = null; wsState = ENABLE_LIVE ? 'START' : 'STATIC'; setWsLabel(); if (Date.now() - mtfLevelsLoadedAt > 60000) loadMtfLevels(); function still(){ return seq === loadSeq && curTF === tf; } function refreshActivePanel(){ var active = panelFromUrl(); if (still() && active) setTab(active); } if (tf === '1s') { load1s(seq); refreshActivePanel(); return; } if (tf === '1m') { loadLocalBars(tf).then(function(){ if (!still()) return; return attach1mAbsorptionSummary(curData).then(function(rows){ if (still()) renderData(rows); }); }).finally(function(){ if (!still()) return; return loadFromBinance(tf).catch(function(e){ console.warn(e.message); }); }).finally(function(){ if (!still()) { openKlineSocket(tf); refreshActivePanel(); } }); return; } loadLocalBars(tf).finally(function(){ if (!still()) return; return loadFromBinance(tf).catch(function(e){ console.warn(e.message); }); }).finally(function(){ if (!still()) { openKlineSocket(tf); refreshActivePanel(); } }); } catch(e) { console.error('loadTF error', e); } }
+        function loadTF(tf, fromHistory){ try { console.log('LOADTF START', tf, loadSeq, Date.now()); curTF = tf || curTF || '1D'; tf = curTF; restoreStructureState(curTF); structureViewportRestorePending=true; var seq = ++loadSeq; console.log('LOADTF SEQ', seq, tf, Date.now()); localStorage.setItem('nceCurrentTF', curTF); try { var tfUrl = new URL(window.location.href); tfUrl.searchParams.set('tf', curTF); var currentPanel = panelFromUrl(); if (currentPanel) tfUrl.searchParams.set('panel', currentPanel); if (fromHistory) window.history.replaceState({panel: currentPanel || 'Grafik', tf: curTF}, '', tfUrl.toString()); else if (tfFromUrl() !== curTF) window.history.pushState({panel: currentPanel || 'Grafik', tf: curTF}, '', tfUrl.toString()); } catch (urlError) {} document.querySelectorAll('#tf button').forEach(function(b){ b.classList.toggle('on', b.textContent === curTF); }); var mpEl = document.getElementById('mp'); if (mpEl) mpEl.innerHTML = '<b>' + tfText(curTF) + '</b>'; syncInstantPrice(); closeSockets(); lastWsUrl = null; wsState = ENABLE_LIVE ? 'START' : 'STATIC'; setWsLabel(); if (Date.now() - mtfLevelsLoadedAt > 60000) loadMtfLevels(); function still(){ return seq === loadSeq && curTF === tf; } function refreshActivePanel(){ var active = panelFromUrl(); if (still() && active) setTab(active); } if (tf === '1s') { load1s(seq); refreshActivePanel(); return; } if (tf === '1m') { loadLocalBars(tf).then(function(){ if (!still()) return; return attach1mAbsorptionSummary(curData).then(function(rows){ if (still()) renderData(rows); }); }).finally(function(){ if (!still()) return; return loadFromBinance(tf).catch(function(e){ console.warn(e.message); }); }).finally(function(){ if (!still()) { openKlineSocket(tf); refreshActivePanel(); } }); return; } loadLocalBars(tf).finally(function(){ if (!still()) return; return loadFromBinance(tf).catch(function(e){ console.warn(e.message); }); }).finally(function(){ if (!still()) { openKlineSocket(tf); refreshActivePanel(); } }); } catch(e) { console.error('loadTF error', e); } }
         function add1sTrade(ms, p, qty, buy){ var t = Math.floor(ms / 1000), quote = p * qty; if (!oneSecondBars[t]) oneSecondBars[t] = {t: t, o: p, h: p, l: p, c: p, v: 0, quote_v: 0, base_v: 0, bv: 0, sv: 0, volume_unit: 'QUOTE_USDT', closed: false}; var c = oneSecondBars[t]; c.h = Math.max(c.h, p); c.l = Math.min(c.l, p); c.c = p; c.v += quote; c.quote_v += quote; c.base_v += qty; if (buy) c.bv += quote; else c.sv += quote; Object.keys(oneSecondBars).forEach(function(k){ oneSecondBars[k].closed = (+k) < t; if (+k < t - 86400) delete oneSecondBars[k]; }); }
         function load1s(seq){ curData = []; oneSecondBars = {}; renderData([]); loadLocalBars('1s').then(function(){ if (seq !== loadSeq || curTF !== '1s') return; curData.forEach(function(x){ oneSecondBars[x.t] = x; }); }).finally(function(){ if (seq === loadSeq && curTF === '1s' && ENABLE_LIVE) open1sSocket(); if (seq === loadSeq && curTF === '1s') { var active=panelFromUrl(); if (active) setTab(active,true); } }); }
         function flush1s(){ var list = Object.values(oneSecondBars).sort(function(a, b){ return a.t - b.t; }); if (!list.length) return; setSeries(list, '1s'); showPrice(curData); showStats('1s', curData); var maxClosed = Math.floor(nowServerMs() / 1000) - 1; var closed = list.filter(function(x){ return x.t <= maxClosed && x.t > (collectorArchiveState.oneSecLastT || 0); }); if (closed.length) { collectorArchiveState.oneSecLastT = closed[closed.length - 1].t; archiveCollectorTail('binance_ws_aggtrade_1s', '1s', closed, 300); } }
