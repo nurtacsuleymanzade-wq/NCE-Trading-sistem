@@ -636,8 +636,8 @@
           [evidence&&evidence.bos,evidence&&evidence.choch,evidence&&evidence.absorption,evidence&&evidence.vwapBias].forEach(function(x){if(x==='long')long++;if(x==='short')short++;});
           return long>short?'long':(short>long?'short':null);
         }
-        function targetTrackingFromChart(tf, sourceRows){
-          var rows=closedBars(sourceRows||[]).filter(function(x){return x.t*1000>=TARGET_TRACKING_START_MS;}), simulated=[];
+        function targetTrackingFromChart(tf, sourceRows, activeSignal){
+          var allRows=(sourceRows||[]).filter(function(x){return x&&isFinite(x.t)&&isFinite(x.c)&&isFinite(x.h)&&isFinite(x.l)&&x.t*1000>=TARGET_TRACKING_START_MS;}), rows=closedBars(allRows), simulated=[];
           if (rows.length>=60) {
             var previousKey=null;
             for (var i=59;i<rows.length;i++) {
@@ -656,6 +656,23 @@
               }
               simulated.push({id:tf+':'+rows[i].t+':'+direction+':'+target.price.toFixed(2),time:rows[i].t,timeframe:tf,direction:direction.toUpperCase(),target:target.price,target_label:target.label,invalidation:invalidation,outcome:outcome,resolved_at:resolvedAt,source:'visible chart candles'});
             }
+
+            /* The displayed target is calculated by the complete Long/Short
+             * score, while the historical replay above uses chart evidence.
+             * Keep the currently displayed target in the same ledger too, and
+             * include the live candle so an intrabar touch is not lost. */
+            var activeDirection=activeSignal&&activeSignal.direction, activeTarget=activeSignal&&activeSignal.target;
+            if ((activeDirection==='long'||activeDirection==='short')&&activeTarget&&isFinite(+activeTarget.price)) {
+              var anchor=+activeSignal.anchorTime||rows[rows.length-1].t, activePrice=+activeTarget.price, activeDistance=Math.abs(activePrice-rows[rows.length-1].c), activeInvalidation=rows[rows.length-1].c-(activeDirection==='long'?-1:1)*Math.max(activeDistance*.45,1), activeOutcome='pending', activeResolvedAt=null;
+              for (var k=0;k<allRows.length;k++) {
+                var future=allRows[k];
+                if (future.t<=anchor) continue;
+                var activeHit=activeDirection==='long'?future.h>=activePrice:future.l<=activePrice, activeInvalid=activeDirection==='long'?future.l<=activeInvalidation:future.h>=activeInvalidation;
+                if (activeHit) { activeOutcome='hit'; activeResolvedAt=future.t; break; }
+                if (activeInvalid) { activeOutcome='not_reached'; activeResolvedAt=future.t; break; }
+              }
+              simulated.push({id:tf+':'+anchor+':'+activeDirection+':'+activePrice.toFixed(2),time:anchor,timeframe:tf,direction:activeDirection.toUpperCase(),target:activePrice,target_label:activeTarget.label||'Score target',invalidation:activeInvalidation,outcome:activeOutcome,resolved_at:activeResolvedAt,source:'visible chart candles + active score target'});
+            }
           }
           var ledger=loadTargetLedger(), byId={};
           ledger.forEach(function(x){if(x&&x.id)byId[x.id]=x;});
@@ -667,7 +684,7 @@
           var all=loadTargetLedger().filter(function(x){return x&&x.timeframe!==tf;}).concat(ledger).sort(function(a,b){return a.time-b.time;});
           saveTargetLedger(all);
           var hit=ledger.filter(function(x){return x.outcome==='hit';}).length, miss=ledger.filter(function(x){return x.outcome==='not_reached';}).length, pending=ledger.filter(function(x){return x.outcome==='pending';}).length;
-          return {timeframe:tf,startUtc4:targetTrackingStartLabel(),source:'Grafik kapalı mumları · BOS/CHoCH/absorption/VWAP',total:ledger.length,hit:hit,notReached:miss,pending:pending,records:ledger.slice(-8)};
+          return {timeframe:tf,startUtc4:targetTrackingStartLabel(),source:'Grafik kapalı mumları + aktif 1m mum · skor hedefi',total:ledger.length,hit:hit,notReached:miss,pending:pending,records:ledger.slice(-8)};
         }
         function fetchRealDecision(tf) {
           var intv=scoreInterval(tf), base=SCORE_FAPI, dataBase=SCORE_FDATA, symbol=SYMBOL;
@@ -718,7 +735,7 @@
             var quality=scoreDataQuality(tf,rows,fundingRows,oiRows,trades,a[7]), qualityMissing=quality.missing||[], qualityStale=quality.stale||[];
             qualityMissing.forEach(function(x){if(missing.indexOf(x)<0)missing.push(x);});
             var totals=criteria.filter(function(x){return x.available;}), longScore=totals.reduce(function(n,x){return n+x.long;},0), shortScore=totals.reduce(function(n,x){return n+x.short;},0), available=totals.length, neutral=Math.max(0,available-longScore-shortScore), direction=longScore>shortScore?'LONG':(shortScore>longScore?'SHORT':'WAIT'), longPct=available?longScore/available*100:0, shortPct=available?shortScore/available*100:0, directionalTotal=longScore+shortScore, longShare=directionalTotal?longScore/directionalTotal*100:50, shortShare=directionalTotal?shortScore/directionalTotal*100:50, confidenceFloor=(1-quality.factor)*50, longEvidence=longPct*quality.factor+confidenceFloor, shortEvidence=shortPct*quality.factor+confidenceFloor, target=scoreTarget(profile,price,direction==='LONG'?'long':(direction==='SHORT'?'short':null));
-            var decision={status:missing.length||quality.status!=='FRESH'?'PARTIAL PASS':'PASS',time_utc:new Date().toISOString(),symbol:symbol,timeframe:tf,source:rowSource+' + Deribit public options API',data_status:missing.length?'PARTIAL':'LIVE',price:price,direction:direction,criteria:criteria,long_score:longScore,short_score:shortScore,available_criteria:available,evidence_percent:{long:longEvidence,short:shortEvidence,neutral:Math.max(0,100-longEvidence-shortEvidence),long_share:longShare,short_share:shortShare},profile:{poc:profile.poc,vah:profile.vah,val:profile.val,hvn:profile.hvn,lvn:profile.lvn,bins:profile.bins,coverage:profile.coverage,method:profile.method},target:target,chartEvidence:{bos:chartEvidence.bos,choch:chartEvidence.choch,absorption:chartEvidence.absorption,vwap:chartEvidence.vwap,vwapBias:chartEvidence.vwapBias},targetTracking:targetTrackingFromChart(tf,chartRows),indicators:{funding_rate:funding,open_interest:oiCurrent,open_interest_delta:oiDelta,delta:delta,aggressive_buy:buyAgg,aggressive_sell:sellAgg,rsi:rsiNow,macd:macd[macd.length-1],macd_signal:signal[signal.length-1],max_pain:maxPain},data_quality:quality,missing:missing,warning:(missing.length||qualityStale.length)?'Eksik/eski veri nedeniyle kanıt güveni düşürüldü; yüzdeler kalibre edilmiş olasılık değildir.':null};
+            var decisionDirection=direction==='LONG'?'long':(direction==='SHORT'?'short':null), decision={status:missing.length||quality.status!=='FRESH'?'PARTIAL PASS':'PASS',time_utc:new Date().toISOString(),symbol:symbol,timeframe:tf,source:rowSource+' + Deribit public options API',data_status:missing.length?'PARTIAL':'LIVE',price:price,direction:direction,criteria:criteria,long_score:longScore,short_score:shortScore,available_criteria:available,evidence_percent:{long:longEvidence,short:shortEvidence,neutral:Math.max(0,100-longEvidence-shortEvidence),long_share:longShare,short_share:shortShare},profile:{poc:profile.poc,vah:profile.vah,val:profile.val,hvn:profile.hvn,lvn:profile.lvn,bins:profile.bins,coverage:profile.coverage,method:profile.method},target:target,chartEvidence:{bos:chartEvidence.bos,choch:chartEvidence.choch,absorption:chartEvidence.absorption,vwap:chartEvidence.vwap,vwapBias:chartEvidence.vwapBias},targetTracking:targetTrackingFromChart(tf,chartRows,{direction:decisionDirection,target:target,anchorTime:rows[rows.length-1]&&rows[rows.length-1].t}),indicators:{funding_rate:funding,open_interest:oiCurrent,open_interest_delta:oiDelta,delta:delta,aggressive_buy:buyAgg,aggressive_sell:sellAgg,rsi:rsiNow,macd:macd[macd.length-1],macd_signal:signal[signal.length-1],max_pain:maxPain},data_quality:quality,missing:missing,warning:(missing.length||qualityStale.length)?'Eksik/eski veri nedeniyle kanıt güveni düşürüldü; yüzdeler kalibre edilmiş olasılık değildir.':null};
             var etaQuery='/api/v1/target-eta?tf='+encodeURIComponent(tf)+(direction&&target?'&direction='+encodeURIComponent(direction)+'&target='+encodeURIComponent(target.price):'');
             var calibrationQuery='/api/v1/target-eta/calibration?tf='+encodeURIComponent(tf)+'&limit=1500&horizon=240';
             return requestJson(etaQuery,{timeframe:tf,symbol:symbol}).then(function(eta){decision.targetEta=eta;return requestJson(calibrationQuery,{timeframe:tf,symbol:symbol}).then(function(cal){decision.targetEtaCalibration=cal;return decision;}).catch(function(err){console.warn('Target ETA calibration unavailable',err&&err.message);return decision;});}).catch(function(err){console.warn('Target ETA backend unavailable; client fallback used',err&&err.message);return decision;});
