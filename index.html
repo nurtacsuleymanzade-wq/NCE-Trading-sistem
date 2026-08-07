@@ -372,7 +372,7 @@
           var started = Date.now();
           var fetchOptions = Object.assign({}, options);
           delete fetchOptions.requestSeq; delete fetchOptions.timeframe; delete fetchOptions.symbol;
-          return fetch(full, Object.assign({ signal: AbortSignal.timeout(8000) }, fetchOptions)).then(function(r) {
+          return fetch(full, Object.assign({ signal: AbortSignal.timeout(20000) }, fetchOptions)).then(function(r) {
             return r.clone().text().then(function(raw) {
               var body = raw; try { body = raw ? JSON.parse(raw) : null; } catch (_) {}
               console.debug('NCE API response', {url: full, httpStatus: r.status, responseBody: body, timeframe: tf, symbol: symbol, requestSequence: requestSeq, elapsedMs: Date.now()-started});
