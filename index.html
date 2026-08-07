@@ -135,6 +135,18 @@
         .decision-table th { color:#8b949e; font-weight:600; }
         .decision-table td:nth-child(2),.decision-table td:nth-child(3) { text-align:center; white-space:nowrap; font-weight:800; }
         .decision-table .decision-detail { color:#8b949e; font-weight:400; }
+        .eta-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(90px,1fr)); gap:8px; margin:10px 0; }
+        .eta-grid span { background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:8px; color:#8b949e; }
+        .eta-grid b { display:block; color:#58a6ff; font-size:1.1rem; margin-top:3px; }
+        .target-eta-card { border-color:#388bfd66; }
+        .target-eta-card ul { margin:5px 0 10px; padding-left:20px; color:#c9d1d9; }
+        .target-eta-card .backend-warn { margin-top:8px; }
+        .target-count-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(125px,1fr)); gap:8px; margin:10px 0; }
+        .target-count-grid span { background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:8px; color:#8b949e; }
+        .target-count-grid b { display:block; color:#c9d1d9; font-size:1.15rem; margin-top:3px; }
+        .target-count-grid .target-hit b { color:#3fb950; }
+        .target-count-grid .target-miss b { color:#f85149; }
+        .target-count-grid .target-pending b { color:#f2cc60; }
         .decision-meter { height:8px; border-radius:5px; overflow:hidden; background:#30363d; display:flex; margin-top:8px; }
         .decision-meter-long { background:#3fb950; }
         .decision-meter-short { background:#f85149; }
@@ -587,6 +599,76 @@
           var usable=levels.filter(function(x){return direction==='long'?x.price>price:x.price<price;}).sort(function(a,b){return direction==='long'?(a.price-b.price||a.priority-b.priority):(b.price-a.price||a.priority-b.priority);});
           return usable[0] || null;
         }
+        /* ====== Chart-native evidence and target outcome tracking ======
+         * The score panel must use the same closed candles that are visible in
+         * the chart. Target history is kept in localStorage so it survives a
+         * refresh and is not reset when the live chart tail advances.
+         */
+        var TARGET_TRACKING_START_MS = Date.parse('2026-08-07T01:10:00Z'); // 05:10 UTC+4, 07.08.2026
+        var TARGET_TRACKING_KEY = 'nceTargetOutcomeLedger:' + SYMBOL;
+        function targetTrackingStartLabel(){ return '07.08.26 05:10 UTC+4'; }
+        function loadTargetLedger(){ try { var x=JSON.parse(localStorage.getItem(TARGET_TRACKING_KEY)||'[]'); return Array.isArray(x)?x:[]; } catch(e) { return []; } }
+        function saveTargetLedger(rows){ try { localStorage.setItem(TARGET_TRACKING_KEY,JSON.stringify(rows.slice(-5000))); } catch(e) {} }
+        function chartSignalEvidence(sourceRows){
+          var rows=closedBars(sourceRows||[]), win=rows.slice(-320), out={available:win.length>=60,rows:win,structure:null,nai:null,vwap:null,last:null,bos:null,choch:null,absorption:null,vwapBias:null};
+          if (!out.available) return out;
+          out.structure=scoreStructure(win);
+          out.nai=calcNAI(win);
+          out.last=out.nai[out.nai.length-1]||{};
+          var events=out.last.naiEvents||[], absorption=null;
+          events.forEach(function(e){ var base=String(e).split(' ')[0]; if (base==='BA') absorption='long'; if (base==='SA') absorption='short'; });
+          if (!absorption) {
+            for (var i=out.nai.length-1;i>=Math.max(0,out.nai.length-8)&&!absorption;i--) {
+              var es=out.nai[i].naiEvents||[];
+              es.forEach(function(e){ var base=String(e).split(' ')[0]; if (base==='BA') absorption='long'; if (base==='SA') absorption='short'; });
+            }
+          }
+          out.bos=out.structure.bos||null;
+          out.choch=out.structure.choch||null;
+          out.absorption=absorption;
+          var vwap=computeVWAP(win), lastVwap=vwap[vwap.length-1]&&+vwap[vwap.length-1].value;
+          out.vwap=lastVwap;
+          out.vwapBias=isFinite(lastVwap)?(win[win.length-1].c>lastVwap?'long':(win[win.length-1].c<lastVwap?'short':null)):null;
+          return out;
+        }
+        function chartScoreDirection(evidence){
+          var long=0,short=0;
+          [evidence&&evidence.bos,evidence&&evidence.choch,evidence&&evidence.absorption,evidence&&evidence.vwapBias].forEach(function(x){if(x==='long')long++;if(x==='short')short++;});
+          return long>short?'long':(short>long?'short':null);
+        }
+        function targetTrackingFromChart(tf, sourceRows){
+          var rows=closedBars(sourceRows||[]).filter(function(x){return x.t*1000>=TARGET_TRACKING_START_MS;}), simulated=[];
+          if (rows.length>=60) {
+            var previousKey=null;
+            for (var i=59;i<rows.length;i++) {
+              var hist=rows.slice(Math.max(0,i-319),i+1), ev=chartSignalEvidence(hist), direction=chartScoreDirection(ev);
+              if (!direction) continue;
+              var price=hist[hist.length-1].c, profile=computeProfile(hist,48), target=scoreTarget(profile,price,direction);
+              if (!target) continue;
+              var key=direction+'|'+target.label+'|'+target.price.toFixed(2);
+              if (key===previousKey) continue;
+              previousKey=key;
+              var distance=Math.abs(target.price-price), invalidation=price-(direction==='long'?-1:1)*Math.max(distance*.45,1), outcome='pending', resolvedAt=null;
+              for (var j=i+1;j<rows.length;j++) {
+                var future=rows[j], hit=direction==='long'?future.h>=target.price:future.l<=target.price, invalid=direction==='long'?future.l<=invalidation:future.h>=invalidation;
+                if (hit) { outcome='hit'; resolvedAt=future.t; break; }
+                if (invalid) { outcome='not_reached'; resolvedAt=future.t; break; }
+              }
+              simulated.push({id:tf+':'+rows[i].t+':'+direction+':'+target.price.toFixed(2),time:rows[i].t,timeframe:tf,direction:direction.toUpperCase(),target:target.price,target_label:target.label,invalidation:invalidation,outcome:outcome,resolved_at:resolvedAt,source:'visible chart candles'});
+            }
+          }
+          var ledger=loadTargetLedger(), byId={};
+          ledger.forEach(function(x){if(x&&x.id)byId[x.id]=x;});
+          simulated.forEach(function(x){
+            var old=byId[x.id];
+            if (!old || old.outcome==='pending' || x.outcome!=='pending') byId[x.id]=old&&old.outcome!=='pending'?old:x;
+          });
+          ledger=Object.keys(byId).map(function(k){return byId[k];}).filter(function(x){return x.timeframe===tf&&x.time*1000>=TARGET_TRACKING_START_MS;}).sort(function(a,b){return a.time-b.time;});
+          var all=loadTargetLedger().filter(function(x){return x&&x.timeframe!==tf;}).concat(ledger).sort(function(a,b){return a.time-b.time;});
+          saveTargetLedger(all);
+          var hit=ledger.filter(function(x){return x.outcome==='hit';}).length, miss=ledger.filter(function(x){return x.outcome==='not_reached';}).length, pending=ledger.filter(function(x){return x.outcome==='pending';}).length;
+          return {timeframe:tf,startUtc4:targetTrackingStartLabel(),source:'Grafik kapalı mumları · BOS/CHoCH/absorption/VWAP',total:ledger.length,hit:hit,notReached:miss,pending:pending,records:ledger.slice(-8)};
+        }
         function fetchRealDecision(tf) {
           var intv=scoreInterval(tf), base=SCORE_FAPI, dataBase=SCORE_FDATA, symbol=SYMBOL;
           var klineUrl=base+'/klines?symbol='+symbol+'&interval='+intv+'&limit=320';
@@ -602,11 +684,14 @@
           ]).then(function(a) {
             var rows=tf==='1s'&&curData&&curData.length>=60?closedBars(curData).slice(-320).map(normalizeBar):scoreBars(a[0]), ticker=a[1]||{}, price=+ticker.price || (rows.length?rows[rows.length-1].c:NaN), rowSource=tf==='1s'?'Binance aggTrade-derived 1s bars + Futures REST':'Binance Futures klines';
             if (rows.length<60 || !isFinite(price)) throw Error('Binance Futures candle verisi yetersiz.');
-            var closes=rows.map(function(x){return x.c;}), profile=computeProfile(rows,48), structure=scoreStructure(rows), criteria=[], missing=[];
+            var closes=rows.map(function(x){return x.c;}), profile=computeProfile(rows,48), structure=scoreStructure(rows), chartRows=curData&&curData.length>=60?closedBars(curData):rows, chartEvidence=chartSignalEvidence(chartRows), criteria=[], missing=[];
             function add(c){criteria.push(c);}
-            add(scoreCriterion('Piyasa yapısı · HH-HL / LH-LL',structure.bias,structure.label,'Binance Futures klines'));
-            add(scoreCriterion('BOS',structure.bos,structure.bos?('BOS '+(structure.bos==='long'?'yukarı':'aşağı')):'Kırılım yok / bekleniyor','Binance Futures klines'));
-            add(scoreCriterion('CHoCH',structure.choch,structure.choch?('CHoCH '+(structure.choch==='long'?'bullish':'bearish')):'CHoCH teyidi yok','Binance Futures klines'));
+            var chartStructure=chartEvidence.structure||structure;
+            add(scoreCriterion('Piyasa yapısı · HH-HL / LH-LL',chartStructure.bias,chartStructure.label,'Grafik kapalı mumları',chartEvidence.available));
+            add(scoreCriterion('BOS · grafik verisi',chartEvidence.bos,chartEvidence.bos?('BOS '+(chartEvidence.bos==='long'?'yukarı':'aşağı')):'Kırılım yok / bekleniyor','Grafik kapalı mumları',chartEvidence.available));
+            add(scoreCriterion('CHoCH · grafik verisi',chartEvidence.choch,chartEvidence.choch?('CHoCH '+(chartEvidence.choch==='long'?'bullish':'bearish')):'CHoCH teyidi yok','Grafik kapalı mumları',chartEvidence.available));
+            add(scoreCriterion('Absorption · grafik verisi',chartEvidence.absorption,chartEvidence.absorption?('Absorption '+(chartEvidence.absorption==='long'?'buy / BA':'sell / SA')):'Aktif absorption yok','Grafik NAI absorption olayları',chartEvidence.available));
+            add(scoreCriterion('VWAP konumu · grafik verisi',chartEvidence.vwapBias,chartEvidence.vwapBias?('Fiyat VWAP '+(chartEvidence.vwapBias==='long'?'üstünde':'altında')):'Fiyat VWAP üzerinde/eşit','Grafik VWAP hesaplaması',chartEvidence.available));
             var recent=rows.slice(-12), delta=recent.reduce(function(n,x){return n+x.delta;},0), deltaBias=scoreSideFromDelta(delta,0);
             add(scoreCriterion('Delta',deltaBias,deltaBias?('Delta '+(deltaBias==='long'?'pozitif':'negatif')):'Delta nötr','Binance Futures taker-buy quote volume'));
             var trades=Array.isArray(a[5])?a[5]:[], buyAgg=0,sellAgg=0;
@@ -633,13 +718,26 @@
             var quality=scoreDataQuality(tf,rows,fundingRows,oiRows,trades,a[7]), qualityMissing=quality.missing||[], qualityStale=quality.stale||[];
             qualityMissing.forEach(function(x){if(missing.indexOf(x)<0)missing.push(x);});
             var totals=criteria.filter(function(x){return x.available;}), longScore=totals.reduce(function(n,x){return n+x.long;},0), shortScore=totals.reduce(function(n,x){return n+x.short;},0), available=totals.length, neutral=Math.max(0,available-longScore-shortScore), direction=longScore>shortScore?'LONG':(shortScore>longScore?'SHORT':'WAIT'), longPct=available?longScore/available*100:0, shortPct=available?shortScore/available*100:0, directionalTotal=longScore+shortScore, longShare=directionalTotal?longScore/directionalTotal*100:50, shortShare=directionalTotal?shortScore/directionalTotal*100:50, confidenceFloor=(1-quality.factor)*50, longEvidence=longPct*quality.factor+confidenceFloor, shortEvidence=shortPct*quality.factor+confidenceFloor, target=scoreTarget(profile,price,direction==='LONG'?'long':(direction==='SHORT'?'short':null));
-            return {status:missing.length||quality.status!=='FRESH'?'PARTIAL PASS':'PASS',time_utc:new Date().toISOString(),symbol:symbol,timeframe:tf,source:rowSource+' + Deribit public options API',data_status:missing.length?'PARTIAL':'LIVE',price:price,direction:direction,criteria:criteria,long_score:longScore,short_score:shortScore,available_criteria:available,evidence_percent:{long:longEvidence,short:shortEvidence,neutral:Math.max(0,100-longEvidence-shortEvidence),long_share:longShare,short_share:shortShare},profile:{poc:profile.poc,vah:profile.vah,val:profile.val,hvn:profile.hvn,lvn:profile.lvn,bins:profile.bins,coverage:profile.coverage,method:profile.method},target:target,indicators:{funding_rate:funding,open_interest:oiCurrent,open_interest_delta:oiDelta,delta:delta,aggressive_buy:buyAgg,aggressive_sell:sellAgg,rsi:rsiNow,macd:macd[macd.length-1],macd_signal:signal[signal.length-1],max_pain:maxPain},data_quality:quality,missing:missing,warning:(missing.length||qualityStale.length)?'Eksik/eski veri nedeniyle kanıt güveni düşürüldü; yüzdeler kalibre edilmiş olasılık değildir.':null};
+            var decision={status:missing.length||quality.status!=='FRESH'?'PARTIAL PASS':'PASS',time_utc:new Date().toISOString(),symbol:symbol,timeframe:tf,source:rowSource+' + Deribit public options API',data_status:missing.length?'PARTIAL':'LIVE',price:price,direction:direction,criteria:criteria,long_score:longScore,short_score:shortScore,available_criteria:available,evidence_percent:{long:longEvidence,short:shortEvidence,neutral:Math.max(0,100-longEvidence-shortEvidence),long_share:longShare,short_share:shortShare},profile:{poc:profile.poc,vah:profile.vah,val:profile.val,hvn:profile.hvn,lvn:profile.lvn,bins:profile.bins,coverage:profile.coverage,method:profile.method},target:target,chartEvidence:{bos:chartEvidence.bos,choch:chartEvidence.choch,absorption:chartEvidence.absorption,vwap:chartEvidence.vwap,vwapBias:chartEvidence.vwapBias},targetTracking:targetTrackingFromChart(tf,chartRows),indicators:{funding_rate:funding,open_interest:oiCurrent,open_interest_delta:oiDelta,delta:delta,aggressive_buy:buyAgg,aggressive_sell:sellAgg,rsi:rsiNow,macd:macd[macd.length-1],macd_signal:signal[signal.length-1],max_pain:maxPain},data_quality:quality,missing:missing,warning:(missing.length||qualityStale.length)?'Eksik/eski veri nedeniyle kanıt güveni düşürüldü; yüzdeler kalibre edilmiş olasılık değildir.':null};
+            var etaQuery='/api/v1/target-eta?tf='+encodeURIComponent(tf)+(direction&&target?'&direction='+encodeURIComponent(direction)+'&target='+encodeURIComponent(target.price):'');
+            return requestJson(etaQuery,{timeframe:tf,symbol:symbol}).then(function(eta){decision.targetEta=eta;return decision;}).catch(function(err){console.warn('Target ETA backend unavailable; client fallback used',err&&err.message);return decision;});
           });
+        }
+        function targetEtaFallback(j) {
+          var dir=j.direction||'WAIT', target=Number(j.target&&((j.target.price!=null)?j.target.price:j.target))||0, price=Number(j.price)||0, dist=Math.abs(target-price), score=Math.max(Number(j.long_score)||0,Number(j.short_score)||0), eff=Math.max(0,Math.min(1,(score-50)/50)), median=dist ? Math.max(15, Math.round(90/(0.7+eff))) : null, first=Math.max(5,Math.min(85,Math.round(35+eff*35))), inv=100-first, neither=0;
+          var curve={}; [15,30,60,120,240].forEach(function(h){curve['hit'+h+'m']=median?Math.round(first*(1-Math.exp(-h/(median*1.15)))):null;});
+          return {status:'CLIENT FALLBACK',direction:dir,price:{current:price,target:target,invalidation:price-(dir==='LONG'?-1:1)*Math.max(dist*.45,1)},probability:Object.assign(curve,{targetFirst:first,invalidationFirst:inv,neither:neither}),eta:{medianMinutes:median,p25Minutes:median?Math.round(median*.47):null,p75Minutes:median?Math.round(median*2.05):null,baseMinutes:median,adjustedMinutes:median},factors:{directionalEfficiency:eff,orderFlowImpactScore:null,profileFrictionScore:null,orderBookFrictionScore:null,absorptionScore:null,liquidationAssistScore:null,sessionActivityScore:null},state:{targetStatus:'TARGET_ACTIVE',confidenceScore:25,confidenceLabel:'LOW'},accelerators:[],decelerators:['Backend ETA endpoint unavailable; client fallback is not calibrated.'],dataHealth:{orderBook:'UNAVAILABLE',openInterest:'UNAVAILABLE',liquidations:'UNAVAILABLE',historicalModel:'INSUFFICIENT_SAMPLE'},warnings:['Fallback: gerçek backend Target ETA verisi alınamadı.']};
+        }
+        function targetEtaCard(j) {
+          var e=j.targetEta||targetEtaFallback(j), p=e.probability||{}, q=e.price||{}, f=e.factors||{}, st=e.state||{};
+          var pct=function(v){return v==null?'—':fmtNum(v,0)+'%';}, mins=function(v){return v==null?'hesaplanamadı':fmtNum(v,0)+' dk';};
+          var unavailable=['orderBookFrictionScore','absorptionScore','liquidationAssistScore'].filter(function(k){return f[k]==null;});
+          return '<div class="decision-card target-eta-card"><h3>Hedef Zaman Analizi · '+esc(e.direction||j.direction||'WAIT')+'</h3><div class="decision-meta">Mevcut: $'+fmtNum(q.current||j.price,2)+' · Hedef: $'+fmtNum(q.target,2)+' · Invalidation: $'+fmtNum(q.invalidation,2)+'<br>Mesafe: $'+fmtNum(q.distanceUsd,2)+' · '+fmtNum(q.distancePct,2)+'% · '+fmtNum(q.distanceAtr,2)+' ATR</div><div class="eta-grid"><span>15 dk: <b>'+pct(p.hit15m)+'</b></span><span>30 dk: <b>'+pct(p.hit30m)+'</b></span><span>60 dk: <b>'+pct(p.hit60m)+'</b></span><span>120 dk: <b>'+pct(p.hit120m)+'</b></span><span>240 dk: <b>'+pct(p.hit240m)+'</b></span></div><div>Medyan ETA: <b>'+mins(e.eta&&e.eta.medianMinutes)+'</b> · Aralık: <b>'+mins(e.eta&&e.eta.p25Minutes)+'–'+mins(e.eta&&e.eta.p75Minutes)+'</b></div><div>Hedef önce: <b>'+pct(p.targetFirst)+'</b> · Invalidation önce: <b>'+pct(p.invalidationFirst)+'</b> · İkisi de olmaz: <b>'+pct(p.neither)+'</b></div><div class="decision-meta">Directional efficiency: '+pct((f.directionalEfficiency||0)*100)+' · Order-flow impact: '+pct(f.orderFlowImpactScore)+' · Profile friction: '+pct(f.profileFrictionScore)+'<br>ETA Confidence: <b>'+pct(st.confidenceScore)+' · '+esc(st.confidenceLabel||'UNKNOWN')+'</b> · Status: <b>'+esc(st.targetStatus||'UNKNOWN')+'</b><br>Kaynak durumu: '+(unavailable.length?'Eksik: '+esc(unavailable.join(', ')):'Tüm Faz 1 kaynakları mevcut')+'</div><div><b>Hızlandıranlar</b><ul>'+(e.accelerators||[]).map(function(x){return '<li>✓ '+esc(x)+'</li>';}).join('')+'</ul><b>Yavaşlatanlar</b><ul>'+(e.decelerators||[]).map(function(x){return '<li>⚠ '+esc(x)+'</li>';}).join('')+'</ul></div>'+(e.warnings||[]).map(function(x){return '<div class="decision-meta backend-warn">'+esc(x)+'</div>';}).join('')+'</div>';
         }
         function decisionEngineView(j) {
           var p=j.evidence_percent||j.probability||{}, profile=j.profile||{}, target=j.target||{}, criteria=j.criteria||[], longPct=+p.long||0, shortPct=+p.short||0, neutralPct=+p.neutral||0, dir=j.direction||'WAIT', dirClass=dir==='LONG'?'decision-long':(dir==='SHORT'?'decision-short':'decision-neutral'), quality=j.data_quality||{};
           var rows=criteria.map(function(x){var lc=x.long?'decision-long':'',sc=x.short?'decision-short':'',status=x.available?(x.bias==='long'?'LONG':(x.bias==='short'?'SHORT':'NÖTR')):'YOK';return '<tr><td>'+esc(x.label)+'<br><span class="decision-detail">'+esc(x.detail)+' · '+esc(x.source)+'</span></td><td class="'+lc+'">'+(x.available?x.long:'—')+'</td><td class="'+sc+'">'+(x.available?x.short:'—')+'</td><td>'+esc(status)+'</td></tr>';}).join('');
-          return responseStatus(j)+'<div class="decision-engine"><div class="decision-summary"><div class="decision-card"><h3>İşlem yönü</h3><div class="decision-number '+dirClass+'">'+esc(dir)+'</div><div class="decision-meta">'+esc(j.long_score||0)+' Long · '+esc(j.short_score||0)+' Short / '+esc(j.available_criteria||0)+' mevcut kriter</div></div><div class="decision-card"><h3>Kanıt payı</h3><div><span class="decision-long">Long '+fmtNum(longPct,1)+'%</span> · <span class="decision-short">Short '+fmtNum(shortPct,1)+'%</span></div><div class="decision-meter"><span class="decision-meter-long" style="width:'+Math.min(100,longPct)+'%"></span><span class="decision-meter-short" style="width:'+Math.min(100,shortPct)+'%"></span><span class="decision-meter-neutral" style="width:'+Math.min(100,neutralPct)+'%"></span></div><div class="decision-meta">Nötr/eksik kanıt '+fmtNum(neutralPct,1)+'% · olasılık değildir; veri güveni '+fmtNum(quality.score,0)+'%</div></div><div class="decision-card"><h3>Gerçek hedef · '+esc(dir)+'</h3><div class="decision-target">'+(target.price?'$'+fmtNum(target.price,2):'Bekle / hedef yok')+'</div><div class="decision-meta">'+esc(target.label||'Profil seviyesi yok')+' · mevcut fiyat $'+fmtNum(j.price,2)+'</div></div></div><div class="decision-card"><h3>HVN · LVN · Value Area</h3><div>POC: <b>$'+fmtNum(profile.poc,2)+'</b> · VAH: <b>$'+fmtNum(profile.vah,2)+'</b> · VAL: <b>$'+fmtNum(profile.val,2)+'</b></div><div class="decision-meta">HVN: '+esc((profile.hvn||[]).map(function(x){return '$'+fmtNum(x,2);}).join(' · ')||'—')+'<br>LVN: '+esc((profile.lvn||[]).map(function(x){return '$'+fmtNum(x,2);}).join(' · ')||'—')+'<br>Yöntem: '+esc(profile.method||'—')+' · coverage '+fmtNum(profile.coverage*100,1)+'%<br>Hedef, seçili timeframe’in yön tarafındaki en yakın gerçek profil seviyesidir.</div></div><div class="decision-card"><h3>Her kriter için +1 / +0</h3><table class="decision-table"><thead><tr><th>Kriter / gerçek kaynak</th><th>Long</th><th>Short</th><th>Sonuç</th></tr></thead><tbody>'+rows+'</tbody></table></div><div class="decision-card"><h3>Veri sağlığı</h3><div class="decision-meta">Kaynak: '+esc(j.source||'—')+' · Güncelleme: '+esc(j.time_utc||'—')+'<br>Durum: <b>'+esc(quality.status||'UNKNOWN')+'</b> · Güven: '+fmtNum(quality.score,0)+'% · Gap: '+esc(quality.gaps||0)+'<br>Funding: '+fmtNum(j.indicators&&j.indicators.funding_rate*100,4)+'% · OI Δ: '+fmtNum(j.indicators&&j.indicators.open_interest_delta,2)+' · RSI: '+fmtNum(j.indicators&&j.indicators.rsi,2)+' · Max pain: $'+fmtNum(j.indicators&&j.indicators.max_pain&&j.indicators.max_pain.price,2)+'<br>'+(j.missing&&j.missing.length?'Eksik gerçek uçlar: '+esc(j.missing.join(', ')):'Tüm skor uçları cevap verdi.')+(quality.stale&&quality.stale.length?'<br>Eski veri: '+esc(quality.stale.join(', ')):'')+(j.warning?'<br>'+esc(j.warning):'')+'</div><button class="decision-refresh" onclick="refreshDecisionPanel()">↻ Gerçek veriyi yenile</button></div></div>';
+          return responseStatus(j)+'<div class="decision-engine"><div class="decision-summary"><div class="decision-card"><h3>İşlem yönü</h3><div class="decision-number '+dirClass+'">'+esc(dir)+'</div><div class="decision-meta">'+esc(j.long_score||0)+' Long · '+esc(j.short_score||0)+' Short / '+esc(j.available_criteria||0)+' mevcut kriter</div></div><div class="decision-card"><h3>Kanıt payı</h3><div><span class="decision-long">Long '+fmtNum(longPct,1)+'%</span> · <span class="decision-short">Short '+fmtNum(shortPct,1)+'%</span></div><div class="decision-meter"><span class="decision-meter-long" style="width:'+Math.min(100,longPct)+'%"></span><span class="decision-meter-short" style="width:'+Math.min(100,shortPct)+'%"></span><span class="decision-meter-neutral" style="width:'+Math.min(100,neutralPct)+'%"></span></div><div class="decision-meta">Nötr/eksik kanıt '+fmtNum(neutralPct,1)+'% · olasılık değildir; veri güveni '+fmtNum(quality.score,0)+'%</div></div><div class="decision-card"><h3>Gerçek hedef · '+esc(dir)+'</h3><div class="decision-target">'+(target.price?'$'+fmtNum(target.price,2):'Bekle / hedef yok')+'</div><div class="decision-meta">'+esc(target.label||'Profil seviyesi yok')+' · mevcut fiyat $'+fmtNum(j.price,2)+'</div></div></div>'+targetEtaCard(j)+'<div class="decision-card"><h3>HVN · LVN · Value Area</h3><div>POC: <b>$'+fmtNum(profile.poc,2)+'</b> · VAH: <b>$'+fmtNum(profile.vah,2)+'</b> · VAL: <b>$'+fmtNum(profile.val,2)+'</b></div><div class="decision-meta">HVN: '+esc((profile.hvn||[]).map(function(x){return '$'+fmtNum(x,2);}).join(' · ')||'—')+'<br>LVN: '+esc((profile.lvn||[]).map(function(x){return '$'+fmtNum(x,2);}).join(' · ')||'—')+'<br>Yöntem: '+esc(profile.method||'—')+' · coverage '+fmtNum(profile.coverage*100,1)+'%<br>Hedef, seçili timeframe’in yön tarafındaki en yakın gerçek profil seviyesidir.</div></div><div class="decision-card"><h3>Her kriter için +1 / +0</h3><table class="decision-table"><thead><tr><th>Kriter / gerçek kaynak</th><th>Long</th><th>Short</th><th>Sonuç</th></tr></thead><tbody>'+rows+'</tbody></table></div><div class="decision-card"><h3>Veri sağlığı</h3><div class="decision-meta">Kaynak: '+esc(j.source||'—')+' · Güncelleme: '+esc(j.time_utc||'—')+'<br>Durum: <b>'+esc(quality.status||'UNKNOWN')+'</b> · Güven: '+fmtNum(quality.score,0)+'% · Gap: '+esc(quality.gaps||0)+'<br>Funding: '+fmtNum(j.indicators&&j.indicators.funding_rate*100,4)+'% · OI Δ: '+fmtNum(j.indicators&&j.indicators.open_interest_delta,2)+' · RSI: '+fmtNum(j.indicators&&j.indicators.rsi,2)+' · Max pain: $'+fmtNum(j.indicators&&j.indicators.max_pain&&j.indicators.max_pain.price,2)+'<br>'+(j.missing&&j.missing.length?'Eksik gerçek uçlar: '+esc(j.missing.join(', ')):'Tüm skor uçları cevap verdi.')+(quality.stale&&quality.stale.length?'<br>Eski veri: '+esc(quality.stale.join(', ')):'')+(j.warning?'<br>'+esc(j.warning):'')+'</div><button class="decision-refresh" onclick="refreshDecisionPanel()">↻ Gerçek veriyi yenile</button></div></div>';
         }
         function refreshDecisionPanel(){ if (panelFromUrl()==='Long/Short Skoru') setTab('Long/Short Skoru', true); }
 
