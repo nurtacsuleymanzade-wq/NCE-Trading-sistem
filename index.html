@@ -548,7 +548,9 @@
           .then(res => res.ok ? res.json() : Promise.reject(res))
           .then(data => {
               if (data.error) throw new Error(data.error);
-              resultDiv.innerHTML = '<ul><b>Hova:</b> ' + esc(data.response) + '</ul>';
+              const hovaReply = data.response || data.reply || data.answer;
+              if (!hovaReply) throw new Error('Hova response is empty');
+              resultDiv.innerHTML = '<ul><b>Hova:</b> ' + esc(hovaReply) + '</ul>';
               if (data.history) {
                 const histOut = document.getElementById('hovaHistory');
                 if (histOut) histOut.innerHTML = '<ul>' + hovaHistoryList(data.history.events || []) + '</ul>';
