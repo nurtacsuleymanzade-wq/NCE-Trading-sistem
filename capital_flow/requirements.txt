@@ -1,0 +1,4 @@
+# Host backend dependencies; the core engine itself uses only the Python stdlib.
+fastapi>=0.115
+httpx>=0.28
+websockets>=12
