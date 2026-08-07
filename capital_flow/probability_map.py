@@ -505,10 +505,11 @@ def build_target_feature_vector(current_price: float, target: Mapping[str, Any],
     return vector
 
 
-def build_probability_targets(current_price: float, candidates: Sequence[Mapping[str, Any]], *, calibration: Mapping[int, Sequence[Mapping[str, Any]]] | None = None, atr: float | None = None, liquidity_levels: Sequence[Mapping[str, Any]] = (), profile: Mapping[str, Any] | None = None, flow: Mapping[str, Any] | None = None, positioning: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
+def build_probability_targets(current_price: float, candidates: Sequence[Mapping[str, Any]], *, calibration: Mapping[int, Sequence[Mapping[str, Any]]] | None = None, atr: float | None = None, liquidity_levels: Sequence[Mapping[str, Any]] = (), profile: Mapping[str, Any] | None = None, flow: Mapping[str, Any] | None = None, positioning: Mapping[str, Any] | None = None, max_targets: int = 50) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for index, raw in enumerate(candidates):
         target = dict(raw); center = float(target["targetCenter"])
+        target["types"] = sorted(set(target.get("types", [])))
         path = path_friction(center, current_price, liquidity_levels, profile or {}, atr=atr)
         score = attraction_score(target, current_price, atr=atr, liquidity_accessibility=accessibility_score((center / current_price - 1) * 100, abs(center - current_price) / max(atr or current_price * .001, 1), path.get("score") or 50, 0), profile_confluence=min(1, len(set(target.get("types", []))) / 4), directional_flow=(1 if (center < current_price and (flow or {}).get("futures_cvd", 0) < 0) or (center > current_price and (flow or {}).get("futures_cvd", 0) > 0) else 0), path_friction_score=path.get("score") or 50)
         cal_rows = (calibration or {}).get(60, ())
@@ -517,6 +518,7 @@ def build_probability_targets(current_price: float, candidates: Sequence[Mapping
         target["id"] = f"target-{index + 1}"; target["direction"] = "UP" if center > current_price else "DOWN"; target["distancePct"] = abs(center / current_price - 1) * 100; target["distanceAtr"] = abs(center - current_price) / max(atr or current_price * .001, 1); target["attractionScore"] = score; target["probability"] = probabilities; target["status"] = cal_status if p1h is not None else "MODEL_SCORE"; target["calibrationSampleSize"] = sample; target["pathFriction"] = path.get("score"); target["pathFrictionLabel"] = path.get("label"); target["eta"] = eta_estimate(current_price, center, atr=atr, path_friction_score=path.get("score") or 50, directional_velocity=(flow or {}).get("price_velocity")); target["confidence"] = round(min(100, (35 if cal_status == "CALIBRATED" else 15) + min(30, sample / 10) + (20 if liquidity_levels else 0) + (10 if profile and profile.get("status") != "UNAVAILABLE" else 0)), 1); target["why"] = [f"{x} confluence" for x in sorted(set(target.get("types", [])))]; target["against"] = [f"Path friction {path.get('label', 'UNKNOWN')}" if path.get("score") is not None else "Path friction unavailable"]; target["missing"] = [] if cal_status == "CALIBRATED" else ["target-level historical calibration"]
         target["featureVector"] = build_target_feature_vector(current_price, target, atr=atr, path=path, flow=flow, positioning=positioning)
         result.append(target)
+    result = sorted(result, key=lambda x: x.get("attractionScore", 0), reverse=True)[:max(1, max_targets)]
     first = competing_first_hit(result)
     for item in result: item["probability"]["firstHit"] = first.get(item["id"])
     return sorted(result, key=lambda x: (x.get("probability", {}).get("firstHit") is not None, x.get("probability", {}).get("firstHit") or -1, x.get("attractionScore", 0)), reverse=True)
@@ -528,3 +530,125 @@ def data_health(rows: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
         status = value.get("status", "UNAVAILABLE") if isinstance(value, Mapping) else "UNAVAILABLE"
         result.append({"source": name, "status": status, "age_seconds": value.get("age_seconds") if isinstance(value, Mapping) else None, "coverage": value.get("coverage") if isinstance(value, Mapping) else None, "confidence": value.get("confidence") if isinstance(value, Mapping) else None, "reason": value.get("reason") if isinstance(value, Mapping) else "not supplied"})
     return result
+
+
+def _true_range(row: Mapping[str, Any], previous_close: float | None) -> float:
+    high = _finite(row.get("high", row.get("h")), 0.0) or 0.0
+    low = _finite(row.get("low", row.get("l")), 0.0) or 0.0
+    close = _finite(row.get("close", row.get("c")), 0.0) or 0.0
+    return max(high - low, abs(high - (previous_close or close)), abs(low - (previous_close or close)))
+
+
+def historical_target_replay(
+    bars: Sequence[Mapping[str, Any]],
+    *,
+    timeframe_seconds: int = 60,
+    warmup_bars: int = 120,
+    max_snapshots: int | None = None,
+) -> dict[str, Any]:
+    """Replay candidate targets without future feature leakage.
+
+    Only ``bars[:index]`` builds the feature vector. Future bars are consulted
+    exclusively by the outcome labeller. The returned rows are suitable for a
+    chronological train/validation/OOS split.
+    """
+    ordered = sorted((dict(row) for row in bars if row.get("closed", True) is not False), key=lambda x: int(x.get("timestamp_ms", x.get("t", x.get("time", 0)))))
+    if len(ordered) <= warmup_bars + 240:
+        return {"status": "UNAVAILABLE", "reason": "insufficient closed bars for 4h labels", "rows": [], "snapshots": []}
+    horizon_bars = {15: max(1, round(15 * 60 / timeframe_seconds)), 30: max(1, round(30 * 60 / timeframe_seconds)), 60: max(1, round(60 * 60 / timeframe_seconds)), 240: max(1, round(240 * 60 / timeframe_seconds))}
+    last_index = len(ordered) - max(horizon_bars.values())
+    if max_snapshots:
+        first_index = max(warmup_bars, last_index - max_snapshots)
+    else:
+        first_index = warmup_bars
+    rows: list[dict[str, Any]] = []
+    snapshots: list[dict[str, Any]] = []
+    for index in range(first_index, last_index):
+        past = ordered[:index]
+        current = _finite(past[-1].get("close", past[-1].get("c")))
+        if current is None or current <= 0:
+            continue
+        ranges = [_true_range(row, _finite(past[pos - 1].get("close", past[pos - 1].get("c"))) if pos else None) for pos, row in enumerate(past[-60:], max(0, len(past) - 60))]
+        atr = statistics.median([x for x in ranges if x > 0]) if any(x > 0 for x in ranges) else current * .001
+        profile = volume_profile([{"price": _finite(row.get("close", row.get("c"))), "notional": _finite(row.get("volume", row.get("v")), 0.0)} for row in past[-240:]], bins=32)
+        highs = [_finite(row.get("high", row.get("h"))) for row in past[-120:]]
+        lows = [_finite(row.get("low", row.get("l"))) for row in past[-120:]]
+        levels = {"SWING_HIGH": [max(x for x in highs if x is not None)] if any(x is not None for x in highs) else [], "SWING_LOW": [min(x for x in lows if x is not None)] if any(x is not None for x in lows) else []}
+        candidates = generate_candidates(current, profile=profile, levels=levels, atr=atr)
+        # A target is a zone, not a one-tick touch. The width is derived only
+        # from past ATR and is fixed before any future bar is read.
+        for candidate in candidates:
+            center = candidate["targetCenter"]
+            candidate["targetLow"] = center - .10 * atr
+            candidate["targetHigh"] = center + .10 * atr
+        cvd = sum((_finite(row.get("buy_volume", row.get("bv")), 0.0) or 0.0) - (_finite(row.get("sell_volume", row.get("sv")), 0.0) or 0.0) for row in past[-30:])
+        feature_targets = build_probability_targets(current, candidates, atr=atr, profile=profile, flow={"futures_cvd": cvd, "price_velocity": (_finite(past[-1].get("close", past[-1].get("c"))) - _finite(past[-2].get("close", past[-2].get("c"))) if len(past) > 1 else None)}, positioning={"delta_OI": None})
+        if not feature_targets:
+            continue
+        timestamp = int(past[-1].get("timestamp_ms", past[-1].get("t", past[-1].get("time", 0))))
+        snapshot_targets: list[dict[str, Any]] = []
+        for target_index, target in enumerate(feature_targets):
+            outcome = {"hit15m": False, "hit30m": False, "hit1h": False, "hit4h": False, "timeToHitMinutes": {}, "firstHit": {}}
+            for minutes, horizon in horizon_bars.items():
+                future = ordered[index:index + horizon]
+                first_hit = None
+                for offset, bar in enumerate(future, 1):
+                    high = _finite(bar.get("high", bar.get("h")))
+                    low = _finite(bar.get("low", bar.get("l")))
+                    if high is not None and low is not None and high >= target["targetLow"] and low <= target["targetHigh"]:
+                        first_hit = offset
+                        break
+                field_name = {15: "hit15m", 30: "hit30m", 60: "hit1h", 240: "hit4h"}[minutes]
+                outcome[field_name] = first_hit is not None
+                outcome["timeToHitMinutes"][str(minutes)] = first_hit * timeframe_seconds / 60 if first_hit is not None else None
+                outcome["firstHit"][str(minutes)] = None if first_hit is None else first_hit
+            row = {"timestamp_ms": timestamp, "target_id": f"{timestamp}-{target_index}", "score": target["attractionScore"], "target_price": target["targetCenter"], "target_low": target["targetLow"], "target_high": target["targetHigh"], "direction": target["direction"], "types": target["types"], "outcome": outcome, "featureVector": target["featureVector"]}
+            snapshot_targets.append(row)
+            rows.append(row)
+        # Label which candidate was touched first on each horizon. Ties remain
+        # deterministic by candidate order and are not treated as probability.
+        for minutes in HORIZONS_MINUTES:
+            field_name = {15: "hit15m", 30: "hit30m", 60: "hit1h", 240: "hit4h"}[minutes]
+            hit_rows = [row for row in snapshot_targets if row["outcome"][field_name]]
+            first = min(hit_rows, key=lambda row: (row["outcome"]["timeToHitMinutes"][str(minutes)], abs(row["target_price"] - current))) if hit_rows else None
+            for row in snapshot_targets:
+                row["outcome"]["firstHit"][str(minutes)] = bool(first and first["target_id"] == row["target_id"])
+        snapshots.append({"timestamp_ms": timestamp, "current_price": current, "atr": atr, "targets": snapshot_targets})
+    return {"status": "DERIVED" if rows else "UNAVAILABLE", "rows": rows, "snapshots": snapshots, "sample_size": len(rows), "snapshot_size": len(snapshots), "timeframe_seconds": timeframe_seconds, "methodology": "past-only profile/ATR/swing candidate features; future OHLC used only for labels"}
+
+
+def build_target_calibration(replay: Mapping[str, Any], *, train_fraction: float = .60, validation_fraction: float = .20, minimum_sample: int = 30) -> dict[str, Any]:
+    rows = sorted(list(replay.get("rows", [])), key=lambda x: int(x.get("timestamp_ms", 0)))
+    timestamps = sorted({int(x.get("timestamp_ms", 0)) for x in rows})
+    if not rows or len(timestamps) < 3:
+        return {"status": "UNAVAILABLE", "reason": "no chronological replay rows", "calibration": {}, "metrics": {}}
+    train_cut = timestamps[max(0, min(len(timestamps) - 1, int(len(timestamps) * train_fraction) - 1))]
+    validation_cut = timestamps[max(0, min(len(timestamps) - 1, int(len(timestamps) * (train_fraction + validation_fraction)) - 1))]
+    train = [row for row in rows if int(row["timestamp_ms"]) <= train_cut]
+    validation = [row for row in rows if train_cut < int(row["timestamp_ms"]) <= validation_cut]
+    oos = [row for row in rows if int(row["timestamp_ms"]) > validation_cut]
+    calibration: dict[str, list[dict[str, Any]]] = {}
+    for minutes, field_name in ((15, "hit15m"), (30, "hit30m"), (60, "hit1h"), (240, "hit4h")):
+        values: list[dict[str, Any]] = []
+        for bucket in range(10):
+            low, high = bucket * 10, 100 if bucket == 9 else (bucket + 1) * 10
+            group = [row for row in train if low <= float(row.get("score", 0)) < high]
+            if not group:
+                continue
+            hits = [bool((row.get("outcome") or {}).get(field_name)) for row in group]
+            values.append({"score_low": low, "score_high": high, "hit_rate": sum(hits) / len(hits), "sample_size": len(hits), "horizon_minutes": minutes, "status": "CALIBRATED" if len(hits) >= minimum_sample else "INSUFFICIENT_SAMPLE"})
+        calibration[str(minutes)] = values
+
+    def metrics(group: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+        output: dict[str, Any] = {}
+        for minutes, field_name in ((15, "hit15m"), (30, "hit30m"), (60, "hit1h"), (240, "hit4h")):
+            mapped = []
+            for row in group:
+                score = float(row.get("score", 0)); bin_rows = [x for x in calibration[str(minutes)] if x["score_low"] <= score < x["score_high"] and x["sample_size"] >= minimum_sample]
+                if bin_rows:
+                    mapped.append((bin_rows[0]["hit_rate"], bool((row.get("outcome") or {}).get(field_name))))
+            brier = sum((p - int(hit)) ** 2 for p, hit in mapped) / len(mapped) if mapped else None
+            ece = sum(abs(sum(int(hit) for _, hit in mapped) / len(mapped) - sum(p for p, _ in mapped) / len(mapped)) for _ in [0]) if mapped else None
+            output[str(minutes)] = {"sample_size": len(mapped), "brier_score": brier, "calibration_error": ece}
+        return output
+    return {"status": "CALIBRATED" if any(x["sample_size"] >= minimum_sample for values in calibration.values() for x in values) else "INSUFFICIENT_SAMPLE", "methodology": "chronological TRAIN/VALIDATION/OUT_OF_SAMPLE; calibration learned from TRAIN only", "sample_size": len(rows), "snapshot_size": len(timestamps), "train_cutoff_ms": train_cut, "validation_cutoff_ms": validation_cut, "calibration": calibration, "metrics": {"TRAIN": metrics(train), "VALIDATION": metrics(validation), "OUT_OF_SAMPLE": metrics(oos)}, "scoreIsProbability": False, "minimum_calibration_sample": minimum_sample}

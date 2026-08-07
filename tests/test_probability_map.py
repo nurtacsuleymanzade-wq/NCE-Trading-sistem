@@ -10,6 +10,8 @@ from capital_flow.probability_map import (
     liquidity_zone_metrics,
     monotonic_probabilities,
     path_friction,
+    build_target_calibration,
+    historical_target_replay,
 )
 from capital_flow.engine import normalize_agg_trade
 from capital_flow.http_api import create_router
@@ -120,4 +122,21 @@ def test_probability_map_api_contract_is_additive_and_marks_estimates(tmp_path):
     assert payload["schemaVersion"] == "probability-map-v1"
     assert payload["rules"]["scoreIsProbability"] is False
     assert payload["liquidations"]["status"] == "ESTIMATED"
-    assert all(target["probability"]["hit1h"] is None for target in payload["targets"])
+    assert payload["rules"]["probabilityStatus"] == "CALIBRATED"
+    calibrated = [target for target in payload["targets"] if target["status"] == "CALIBRATED"]
+    assert calibrated
+    assert all(target["probability"]["hit1h"] is not None for target in calibrated)
+    assert any(round(target["attractionScore"] / 100, 6) != round(target["probability"]["hit1h"], 6) for target in calibrated)
+
+
+def test_historical_replay_uses_future_only_as_labels():
+    import json
+    from pathlib import Path
+
+    bars = json.loads((Path("data") / "bars_1m.json").read_text())[:420]
+    replay = historical_target_replay(bars, timeframe_seconds=60, warmup_bars=60, max_snapshots=100)
+    assert replay["status"] == "DERIVED"
+    assert "future OHLC used only for labels" in replay["methodology"]
+    calibration = build_target_calibration(replay, minimum_sample=1)
+    assert calibration["status"] in {"CALIBRATED", "INSUFFICIENT_SAMPLE"}
+    assert calibration["scoreIsProbability"] is False

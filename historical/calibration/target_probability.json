@@ -1,0 +1,323 @@
+{
+  "calibration": {
+    "15": [
+      {
+        "hit_rate": 0.0,
+        "horizon_minutes": 15,
+        "sample_size": 69,
+        "score_high": 30,
+        "score_low": 20,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 0.0,
+        "horizon_minutes": 15,
+        "sample_size": 544,
+        "score_high": 40,
+        "score_low": 30,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 0.053691275167785234,
+        "horizon_minutes": 15,
+        "sample_size": 596,
+        "score_high": 50,
+        "score_low": 40,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 0.2925531914893617,
+        "horizon_minutes": 15,
+        "sample_size": 376,
+        "score_high": 60,
+        "score_low": 50,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 0.6342412451361867,
+        "horizon_minutes": 15,
+        "sample_size": 257,
+        "score_high": 70,
+        "score_low": 60,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 0.9245283018867925,
+        "horizon_minutes": 15,
+        "sample_size": 53,
+        "score_high": 80,
+        "score_low": 70,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 1.0,
+        "horizon_minutes": 15,
+        "sample_size": 1,
+        "score_high": 90,
+        "score_low": 80,
+        "status": "INSUFFICIENT_SAMPLE"
+      }
+    ],
+    "240": [
+      {
+        "hit_rate": 0.0,
+        "horizon_minutes": 240,
+        "sample_size": 69,
+        "score_high": 30,
+        "score_low": 20,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 0.19117647058823528,
+        "horizon_minutes": 240,
+        "sample_size": 544,
+        "score_high": 40,
+        "score_low": 30,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 0.46140939597315433,
+        "horizon_minutes": 240,
+        "sample_size": 596,
+        "score_high": 50,
+        "score_low": 40,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 0.8058510638297872,
+        "horizon_minutes": 240,
+        "sample_size": 376,
+        "score_high": 60,
+        "score_low": 50,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 0.9416342412451362,
+        "horizon_minutes": 240,
+        "sample_size": 257,
+        "score_high": 70,
+        "score_low": 60,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 1.0,
+        "horizon_minutes": 240,
+        "sample_size": 53,
+        "score_high": 80,
+        "score_low": 70,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 1.0,
+        "horizon_minutes": 240,
+        "sample_size": 1,
+        "score_high": 90,
+        "score_low": 80,
+        "status": "INSUFFICIENT_SAMPLE"
+      }
+    ],
+    "30": [
+      {
+        "hit_rate": 0.0,
+        "horizon_minutes": 30,
+        "sample_size": 69,
+        "score_high": 30,
+        "score_low": 20,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 0.012867647058823529,
+        "horizon_minutes": 30,
+        "sample_size": 544,
+        "score_high": 40,
+        "score_low": 30,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 0.13758389261744966,
+        "horizon_minutes": 30,
+        "sample_size": 596,
+        "score_high": 50,
+        "score_low": 40,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 0.39095744680851063,
+        "horizon_minutes": 30,
+        "sample_size": 376,
+        "score_high": 60,
+        "score_low": 50,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 0.7198443579766537,
+        "horizon_minutes": 30,
+        "sample_size": 257,
+        "score_high": 70,
+        "score_low": 60,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 0.9433962264150944,
+        "horizon_minutes": 30,
+        "sample_size": 53,
+        "score_high": 80,
+        "score_low": 70,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 1.0,
+        "horizon_minutes": 30,
+        "sample_size": 1,
+        "score_high": 90,
+        "score_low": 80,
+        "status": "INSUFFICIENT_SAMPLE"
+      }
+    ],
+    "60": [
+      {
+        "hit_rate": 0.0,
+        "horizon_minutes": 60,
+        "sample_size": 69,
+        "score_high": 30,
+        "score_low": 20,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 0.06066176470588235,
+        "horizon_minutes": 60,
+        "sample_size": 544,
+        "score_high": 40,
+        "score_low": 30,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 0.24161073825503357,
+        "horizon_minutes": 60,
+        "sample_size": 596,
+        "score_high": 50,
+        "score_low": 40,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 0.5186170212765957,
+        "horizon_minutes": 60,
+        "sample_size": 376,
+        "score_high": 60,
+        "score_low": 50,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 0.7782101167315175,
+        "horizon_minutes": 60,
+        "sample_size": 257,
+        "score_high": 70,
+        "score_low": 60,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 0.9433962264150944,
+        "horizon_minutes": 60,
+        "sample_size": 53,
+        "score_high": 80,
+        "score_low": 70,
+        "status": "CALIBRATED"
+      },
+      {
+        "hit_rate": 1.0,
+        "horizon_minutes": 60,
+        "sample_size": 1,
+        "score_high": 90,
+        "score_low": 80,
+        "status": "INSUFFICIENT_SAMPLE"
+      }
+    ]
+  },
+  "generated_at": "2026-08-07T06:52:41.354007+00:00",
+  "methodology": "chronological TRAIN/VALIDATION/OUT_OF_SAMPLE; calibration learned from TRAIN only",
+  "metrics": {
+    "OUT_OF_SAMPLE": {
+      "15": {
+        "brier_score": 0.15856213860324747,
+        "calibration_error": 0.004719684769862953,
+        "sample_size": 598
+      },
+      "240": {
+        "brier_score": 0.2651825477135083,
+        "calibration_error": 0.24821346801722477,
+        "sample_size": 598
+      },
+      "30": {
+        "brier_score": 0.15837313806341982,
+        "calibration_error": 0.033843898572617326,
+        "sample_size": 598
+      },
+      "60": {
+        "brier_score": 0.17113935124041757,
+        "calibration_error": 0.0008390821748427424,
+        "sample_size": 598
+      }
+    },
+    "TRAIN": {
+      "15": {
+        "brier_score": 0.09045795165232187,
+        "calibration_error": 1.915134717478395e-15,
+        "sample_size": 1895
+      },
+      "240": {
+        "brier_score": 0.16104575432425083,
+        "calibration_error": 6.439293542825908e-15,
+        "sample_size": 1895
+      },
+      "30": {
+        "brier_score": 0.1170534485744976,
+        "calibration_error": 3.247402347028583e-15,
+        "sample_size": 1895
+      },
+      "60": {
+        "brier_score": 0.14842430693403044,
+        "calibration_error": 5.828670879282072e-15,
+        "sample_size": 1895
+      }
+    },
+    "VALIDATION": {
+      "15": {
+        "brier_score": 0.08118254849652065,
+        "calibration_error": 0.005124151201219895,
+        "sample_size": 595
+      },
+      "240": {
+        "brier_score": 0.3359412188435955,
+        "calibration_error": 0.3280125994433221,
+        "sample_size": 595
+      },
+      "30": {
+        "brier_score": 0.0932458100045724,
+        "calibration_error": 0.0012271796026519788,
+        "sample_size": 595
+      },
+      "60": {
+        "brier_score": 0.12675074617095364,
+        "calibration_error": 0.05091289667686527,
+        "sample_size": 595
+      }
+    }
+  },
+  "minimum_calibration_sample": 30,
+  "no_lookahead": true,
+  "raw_or_derived": "DERIVED",
+  "replay": {
+    "methodology": "past-only profile/ATR/swing candidate features; future OHLC used only for labels",
+    "sample_size": 3089,
+    "snapshot_size": 640,
+    "status": "DERIVED",
+    "timeframe_seconds": 60
+  },
+  "sample_size": 3089,
+  "scoreIsProbability": false,
+  "snapshot_size": 640,
+  "source": "data/bars_1m.json",
+  "status": "CALIBRATED",
+  "train_cutoff_ms": 1786055520,
+  "validation_cutoff_ms": 1786063200
+}

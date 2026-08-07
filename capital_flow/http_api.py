@@ -124,8 +124,10 @@ def create_router(db_path: str | None = None):
     database = db_path or os.environ.get("NCE_CAPITAL_FLOW_DB", "/var/lib/nce-trading/capital_flow.sqlite3")
     heartbeat_path = os.environ.get("NCE_CAPITAL_FLOW_HEARTBEAT", "/var/lib/nce-trading/capital_flow_heartbeat.json")
     context_path = Path(os.environ.get("NCE_CAPITAL_FLOW_CONTEXT_STATE", "/var/lib/nce-trading/capital_flow_context.json"))
-    historical_path = Path(os.environ.get("NCE_CAPITAL_FLOW_HISTORICAL_SUMMARY", "/var/lib/nce-trading/capital_flow/historical/validation_summary.json"))
-    probability_calibration_path = Path(os.environ.get("NCE_PROBABILITY_MAP_CALIBRATION", str(historical_path.parent / "calibration" / "target_probability.json")))
+    local_historical_path = Path(__file__).resolve().parent.parent / "historical" / "validation_summary.json"
+    historical_path = Path(os.environ.get("NCE_CAPITAL_FLOW_HISTORICAL_SUMMARY", str(local_historical_path if local_historical_path.exists() else "/var/lib/nce-trading/capital_flow/historical/validation_summary.json")))
+    local_probability_calibration = Path(__file__).resolve().parent.parent / "historical" / "calibration" / "target_probability.json"
+    probability_calibration_path = Path(os.environ.get("NCE_PROBABILITY_MAP_CALIBRATION", str(local_probability_calibration if local_probability_calibration.exists() else historical_path.parent / "calibration" / "target_probability.json")))
 
     def external_context() -> dict[str, Any]:
         if not context_path.exists():
@@ -185,7 +187,8 @@ def create_router(db_path: str | None = None):
             if probability_calibration_path.exists() and not any(calibration_rows.values()):
                 try:
                     raw_calibration = json.loads(probability_calibration_path.read_text())
-                    calibration_rows = {int(k): v for k, v in raw_calibration.items()} if isinstance(raw_calibration, dict) else calibration_rows
+                    calibration_source = raw_calibration.get("calibration", raw_calibration) if isinstance(raw_calibration, dict) else {}
+                    calibration_rows = {int(k): v for k, v in calibration_source.items() if str(k).isdigit()} if isinstance(calibration_source, dict) else calibration_rows
                 except (OSError, ValueError, TypeError):
                     pass
             targets = build_probability_targets(current_price, candidates, calibration=calibration_rows, atr=atr, liquidity_levels=liquidity.get("levels", []), profile=profile, flow=flow, positioning=positioning)

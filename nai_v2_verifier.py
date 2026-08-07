@@ -161,6 +161,18 @@ def calc_nai(rows, timeframe=None):
             initiative_episode = None
 
         raw_events = []
+        # A strong dominant bar starts an initiative episode even when its
+        # price response is flat or adverse. Otherwise the first absorption /
+        # failure candle could never emit BA/BF (or SA/SF) because the
+        # episode-gated event logic had no prior initiative marker.
+        if initiative_episode is None and buy_strong and buy_dominant:
+            initiative_episode = "BUY"
+            if initiative_buy:
+                raw_events.append("IB")
+        elif initiative_episode is None and sell_strong and sell_dominant:
+            initiative_episode = "SELL"
+            if initiative_sell:
+                raw_events.append("IS")
         if initiative_buy and initiative_episode != "BUY":
             raw_events.append("IB")
             initiative_episode = "BUY"
@@ -206,9 +218,9 @@ def calc_nai(rows, timeframe=None):
                 one_s_sell_episode = max(one_s_sell_episode + 1, sum(one_s_sell_window))
             else:
                 one_s_sell_episode = 0
-            if buy_window_active and not buy_window_active_prev:
+            if buy_window_active:
                 raw_events = [e for e in raw_events if e != "BA"] + [f"BA {one_s_buy_episode}s"]
-            if sell_window_active and not sell_window_active_prev:
+            if sell_window_active:
                 raw_events = [e for e in raw_events if e != "SA"] + [f"SA {one_s_sell_episode}s"]
             buy_window_active_prev = buy_window_active
             sell_window_active_prev = sell_window_active
