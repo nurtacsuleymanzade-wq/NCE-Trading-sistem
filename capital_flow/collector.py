@@ -317,7 +317,10 @@ class BinancePublicCollector:
                                 item["longPosition"] = item.get("longPosition", item.get("longAccount"))
                                 item["shortPosition"] = item.get("shortPosition", item.get("shortAccount"))
                             self.store.insert_top_trader(kind, symbol, period, int(item.get("timestamp") or now_ms), item)
-                            self.health["last_top_trader_update"] = int(item.get("timestamp") or now_ms)
+                            # The payload timestamp is the market observation
+                            # time and may be old for the 1d period. Health
+                            # must report successful ingestion time instead.
+                            self.health["last_top_trader_update"] = now_ms
             except Exception:
                 # The API exposes stale/unavailable status from storage; a
                 # transient poll error is not converted into a numeric value.
