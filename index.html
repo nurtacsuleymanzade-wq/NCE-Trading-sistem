@@ -1330,7 +1330,7 @@
           curData = list;
           cs.setData(list.map(function(x){ return {time: x.t, open: x.o, high: x.h, low: x.l, close: x.c}; }));
           var structureState = marketStructureMarkers(list);
-          var markers = glossaryVisible ? naiMarkers(list).concat(structureState.markers || []) : [];
+          var markers = naiMarkers(list).concat(structureState.markers || []);
           cs.setMarkers(markers);
           vs.setData(pan.vol ? list.map(function(x){ return {time: x.t, value: x.v || 0, color: x.closed ? 'rgba(38,166,154,0.3)' : 'rgba(242,204,96,0.25)'}; }) : []);
           ds.setData(pan.del ? list.map(function(x){ var d = x.delta != null ? x.delta : ((x.bv || 0) - (x.sv || 0)); return {time: x.t, value: Math.abs(d), color: x.closed ? (d >= 0 ? 'rgba(38,166,154,0.3)' : 'rgba(239,83,80,0.3)') : 'rgba(242,204,96,0.25)'}; }) : []);
