@@ -568,6 +568,9 @@
             j.source = 'backend_macro_news';
             j.articles = sourcedData.articles || [];
             j.source_health = sourcedData.source_health || [];
+            j.forecast = sourcedData.forecast || {direction:'UNAVAILABLE',confidence:'LOW',relevance:'UNAVAILABLE',freshness:'UNKNOWN',decision:'WAIT',warning:'News alone is not a trade trigger.'};
+            j.warnings = sourcedData.warnings || [];
+            j.rules = sourcedData.rules || {};
           }
           var archive = macroArchive();
           if (!archive.length) {
@@ -578,9 +581,12 @@
           return j;
         }
         function macroNewsView(j){
-          var ev = (j.upcoming_events || []).map(function(x){return '<tr><td>'+esc(x.type)+'</td><td>'+esc(x.impact)+'</td><td>'+esc(x.status)+'</td><td>'+esc(x.watch)+'</td></tr>';}).join('');
-          var ar = (j.historical_reaction_archive || []).slice(-8).reverse().map(function(x){return '<tr><td>'+esc(x.date_utc||'-')+'</td><td>'+esc(x.event||'-')+'</td><td>'+esc(x.btc_reaction||'-')+'</td><td>'+esc(x.note||x.source||'')+'</td></tr>';}).join('');
-          return '<div class="term-grid">'+pill('Status', j.status === 'PASS', j.status) + pill('Source', j.source !== 'local_macro_news_contract', j.source) + card('Upcoming Events', '<table class="term-table"><tr><th>Event</th><th>Impact</th><th>Status</th><th>Watch</th></tr>' + ev + '</table>') + card('Historical BTC Reactions (Last 8)', '<table class="term-table"><tr><th>Date</th><th>Event</th><th>BTC Reaction</th><th>Notes</th></tr>' + ar + '</table>') + '</div>';
+          var f=j.forecast||{};
+          var articles=(j.articles||[]).slice(0,20).map(function(x){return '<tr><td>'+esc(x.category||'markets')+'</td><td>'+esc(x.title||'-')+'</td><td>'+esc(x.source||'-')+'</td><td>'+esc(x.published_at||'-')+'</td><td>'+esc(x.direction||'UNAVAILABLE')+'</td><td>'+esc(x.relevance||'UNAVAILABLE')+'</td><td>'+esc(x.relationship||'not_confirmed')+'</td></tr>';}).join('');
+          var health=(j.source_health||[]).map(function(x){return '<tr><td>'+esc(x.name||'-')+'</td><td>'+esc(x.status||'UNKNOWN')+'</td><td>'+esc(x.items==null?'-':x.items)+'</td><td>'+esc(x.error||'')+'</td></tr>';}).join('');
+          var warning=(j.warnings||[]).concat([f.warning||'News alone is not a trade trigger.']).map(function(x){return '<li>'+esc(x)+'</li>';}).join('');
+          var forecast='<div class="term-grid">'+pill('News direction',f.direction==='BULLISH',f.direction||'UNAVAILABLE')+pill('Confidence',false,f.confidence||'LOW')+pill('Relevance',f.relevance==='HIGH',f.relevance||'UNAVAILABLE')+pill('Freshness',f.freshness==='RECENT',f.freshness||'UNKNOWN')+pill('Decision',false,f.decision||'WAIT')+'</div>';
+          return '<div class="term-grid">'+pill('Status',j.status==='PASS',j.status||'SOURCE_MISSING')+pill('Rule',false,'SUPPORTING EVIDENCE ONLY')+'</div>'+card('Macro/news forecast for '+esc(j.timeframe||curTF),forecast+'<div style="margin-top:10px;color:#f2cc60">Conditional headline context; confirm with structure, liquidity, order flow, trend and risk before any decision.</div>')+card('Investing.com + official sources', '<table class="term-table"><tr><th>Category</th><th>Headline</th><th>Source</th><th>UTC</th><th>Direction</th><th>Relevance</th><th>Relation</th></tr>'+articles+'</table>')+card('Source health','<table class="term-table"><tr><th>Source</th><th>Status</th><th>Items</th><th>Error</th></tr>'+health+'</table>')+card('Warnings', '<ul>'+warning+'</ul>','backend-warn');
         }
         function renderMacroNewsTab(j){window.__nceMacroNews=j;var term=document.getElementById('terminal');if(term)term.innerHTML=macroNewsView(j);return j;}
         function loadMacroNewsLocal(tf){
