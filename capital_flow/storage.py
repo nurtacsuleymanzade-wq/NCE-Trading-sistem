@@ -24,7 +24,13 @@ CREATE TABLE IF NOT EXISTS futures_aggtrades_raw (
 );
 CREATE TABLE IF NOT EXISTS orderbook_raw (
   id INTEGER PRIMARY KEY AUTOINCREMENT, symbol TEXT NOT NULL, timestamp_ms INTEGER NOT NULL,
-  last_update_id INTEGER, payload_json TEXT NOT NULL
+  market TEXT NOT NULL DEFAULT 'spot', last_update_id INTEGER, payload_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS orderbook_events_raw (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, symbol TEXT NOT NULL, market TEXT NOT NULL,
+  timestamp_ms INTEGER NOT NULL, update_id INTEGER, price REAL NOT NULL,
+  side TEXT NOT NULL, quantity REAL NOT NULL, notional REAL NOT NULL,
+  action TEXT NOT NULL, remaining_quantity REAL, payload_json TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS oi_raw (
   symbol TEXT NOT NULL, timestamp_ms INTEGER NOT NULL, open_interest REAL,
@@ -55,9 +61,45 @@ CREATE TABLE IF NOT EXISTS graphsense_transactions_raw (txid TEXT PRIMARY KEY, t
 CREATE TABLE IF NOT EXISTS etf_source_raw (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp_ms INTEGER, fund TEXT, payload_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sec_filings_raw (accession_number TEXT PRIMARY KEY, filed_at TEXT, payload_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS smart_money_raw (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp_ms INTEGER, payload_json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS probability_target_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, symbol TEXT NOT NULL, timestamp_ms INTEGER NOT NULL,
+  timeframe TEXT NOT NULL, target_id TEXT NOT NULL, score REAL, status TEXT NOT NULL,
+  payload_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS target_features (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, symbol TEXT NOT NULL, timestamp_ms INTEGER NOT NULL,
+  target_id TEXT NOT NULL, payload_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS target_outcomes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, symbol TEXT NOT NULL, timestamp_ms INTEGER NOT NULL,
+  target_id TEXT NOT NULL, payload_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS liquidity_heatmap_buckets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, symbol TEXT NOT NULL, market TEXT NOT NULL,
+  timestamp_ms INTEGER NOT NULL, price_bin REAL NOT NULL, payload_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS liquidation_cohorts (
+  cohort_id TEXT PRIMARY KEY, symbol TEXT NOT NULL, created_at_ms INTEGER NOT NULL,
+  payload_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS liquidation_map_buckets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, symbol TEXT NOT NULL, timestamp_ms INTEGER NOT NULL,
+  price_low REAL, price_high REAL, side TEXT NOT NULL, payload_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS probability_calibration (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, symbol TEXT NOT NULL, horizon_minutes INTEGER NOT NULL,
+  score_low REAL NOT NULL, score_high REAL NOT NULL, hit_rate REAL,
+  sample_size INTEGER NOT NULL, payload_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS historical_analogues (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, symbol TEXT NOT NULL, timestamp_ms INTEGER NOT NULL,
+  target_id TEXT NOT NULL, payload_json TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_spot_trades_time ON spot_aggtrades_raw(symbol, timestamp_ms);
 CREATE INDEX IF NOT EXISTS idx_futures_trades_time ON futures_aggtrades_raw(symbol, timestamp_ms);
 CREATE INDEX IF NOT EXISTS idx_orderbook_time ON orderbook_raw(symbol, timestamp_ms);
+CREATE INDEX IF NOT EXISTS idx_orderbook_events_time ON orderbook_events_raw(symbol, market, timestamp_ms);
+CREATE INDEX IF NOT EXISTS idx_probability_snapshots_time ON probability_target_snapshots(symbol, timestamp_ms);
 """
 
 
@@ -70,6 +112,10 @@ class CapitalFlowStore:
         self.conn = sqlite3.connect(self.path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        # Additive migration for databases created before Probability Map.
+        columns = {row[1] for row in self.conn.execute("PRAGMA table_info(orderbook_raw)").fetchall()}
+        if "market" not in columns:
+            self.conn.execute("ALTER TABLE orderbook_raw ADD COLUMN market TEXT NOT NULL DEFAULT 'spot'")
         self.conn.commit()
 
     def close(self) -> None:
@@ -91,7 +137,7 @@ class CapitalFlowStore:
         if table not in allowed:
             raise ValueError(f"unsupported raw table: {table}")
         if table == "orderbook_raw":
-            self.conn.execute("INSERT INTO orderbook_raw(symbol, timestamp_ms, last_update_id, payload_json) VALUES(?, ?, ?, ?)", (fields.get("symbol", "BTCUSDT"), timestamp_ms, fields.get("last_update_id"), json.dumps(payload, separators=(",", ":"))))
+            self.conn.execute("INSERT INTO orderbook_raw(symbol, timestamp_ms, market, last_update_id, payload_json) VALUES(?, ?, ?, ?, ?)", (fields.get("symbol", "BTCUSDT"), timestamp_ms, fields.get("market", "spot"), fields.get("last_update_id"), json.dumps(payload, separators=(",", ":"))))
         elif table == "liquidations_raw":
             self.conn.execute("INSERT INTO liquidations_raw(symbol, timestamp_ms, side, notional_usd, payload_json) VALUES(?, ?, ?, ?, ?)", (fields.get("symbol", "BTCUSDT"), timestamp_ms, fields.get("side"), fields.get("notional_usd"), json.dumps(payload, separators=(",", ":"))))
         elif table == "graphsense_transactions_raw":
@@ -104,6 +150,39 @@ class CapitalFlowStore:
             self.conn.execute("INSERT INTO smart_money_raw(timestamp_ms, payload_json) VALUES(?, ?)", (timestamp_ms, json.dumps(payload, separators=(",", ":"))))
         else:
             self.conn.execute("INSERT INTO coinmetrics_raw(timestamp_ms, payload_json) VALUES(?, ?)", (timestamp_ms, json.dumps(payload, separators=(",", ":"))))
+        self.conn.commit()
+
+    def insert_orderbook_events(self, symbol: str, market: str, events: Iterable[dict[str, Any]]) -> None:
+        rows = []
+        for event in events:
+            rows.append((symbol, market, int(event.get("timestamp_ms", 0)), event.get("update_id"), float(event.get("price", 0)), str(event.get("side", "UNKNOWN")), float(event.get("quantity", 0)), float(event.get("notional", 0)), str(event.get("action", "UNKNOWN")), float(event.get("remaining_quantity", 0)), json.dumps(event, separators=(",", ":"))))
+        if rows:
+            self.conn.executemany("INSERT INTO orderbook_events_raw(symbol, market, timestamp_ms, update_id, price, side, quantity, notional, action, remaining_quantity, payload_json) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+            self.conn.commit()
+
+    def insert_derived_artifact(self, table: str, symbol: str, timestamp_ms: int, payload: dict[str, Any], **fields: Any) -> None:
+        """Persist derived Probability Map artifacts without touching raw rows."""
+        allowed = {"probability_target_snapshots", "target_features", "target_outcomes", "liquidity_heatmap_buckets", "liquidation_cohorts", "liquidation_map_buckets", "probability_calibration", "historical_analogues"}
+        if table not in allowed:
+            raise ValueError(f"unsupported derived table: {table}")
+        if table == "probability_target_snapshots":
+            sql = "INSERT INTO probability_target_snapshots(symbol,timestamp_ms,timeframe,target_id,score,status,payload_json) VALUES(?,?,?,?,?,?,?)"
+            params = (symbol, timestamp_ms, fields.get("timeframe", "5m"), fields.get("target_id", "unknown"), fields.get("score"), fields.get("status", "MODEL_SCORE"), json.dumps(payload, separators=(",", ":")))
+        elif table == "target_features":
+            sql = "INSERT INTO target_features(symbol,timestamp_ms,target_id,payload_json) VALUES(?,?,?,?)"; params = (symbol, timestamp_ms, fields.get("target_id", "unknown"), json.dumps(payload, separators=(",", ":")))
+        elif table == "target_outcomes":
+            sql = "INSERT INTO target_outcomes(symbol,timestamp_ms,target_id,payload_json) VALUES(?,?,?,?)"; params = (symbol, timestamp_ms, fields.get("target_id", "unknown"), json.dumps(payload, separators=(",", ":")))
+        elif table == "liquidity_heatmap_buckets":
+            sql = "INSERT INTO liquidity_heatmap_buckets(symbol,market,timestamp_ms,price_bin,payload_json) VALUES(?,?,?,?,?)"; params = (symbol, fields.get("market", "spot"), timestamp_ms, fields.get("price_bin", 0), json.dumps(payload, separators=(",", ":")))
+        elif table == "liquidation_cohorts":
+            sql = "INSERT OR REPLACE INTO liquidation_cohorts(cohort_id,symbol,created_at_ms,payload_json) VALUES(?,?,?,?)"; params = (fields.get("cohort_id", "unknown"), symbol, fields.get("created_at_ms", timestamp_ms), json.dumps(payload, separators=(",", ":")))
+        elif table == "liquidation_map_buckets":
+            sql = "INSERT INTO liquidation_map_buckets(symbol,timestamp_ms,price_low,price_high,side,payload_json) VALUES(?,?,?,?,?,?)"; params = (symbol, timestamp_ms, fields.get("price_low"), fields.get("price_high"), fields.get("side", "UNKNOWN"), json.dumps(payload, separators=(",", ":")))
+        elif table == "probability_calibration":
+            sql = "INSERT INTO probability_calibration(symbol,horizon_minutes,score_low,score_high,hit_rate,sample_size,payload_json) VALUES(?,?,?,?,?,?,?)"; params = (symbol, fields.get("horizon_minutes", 60), fields.get("score_low", 0), fields.get("score_high", 100), fields.get("hit_rate"), fields.get("sample_size", 0), json.dumps(payload, separators=(",", ":")))
+        else:
+            sql = "INSERT INTO historical_analogues(symbol,timestamp_ms,target_id,payload_json) VALUES(?,?,?,?)"; params = (symbol, timestamp_ms, fields.get("target_id", "unknown"), json.dumps(payload, separators=(",", ":")))
+        self.conn.execute(sql, params)
         self.conn.commit()
 
     def insert_oi(self, symbol: str, timestamp_ms: int, value: float, payload: dict[str, Any]) -> None:
@@ -136,6 +215,29 @@ class CapitalFlowStore:
             result.append(item)
         return list(reversed(result))
 
+    def orderbook_history(self, symbol: str = "BTCUSDT", market: str = "spot", limit: int = 120) -> list[dict[str, Any]]:
+        rows = self.conn.execute("SELECT * FROM orderbook_raw WHERE symbol = ? AND market = ? ORDER BY timestamp_ms DESC LIMIT ?", (symbol, market, limit)).fetchall()
+        result = []
+        for row in reversed(rows):
+            item = dict(row); item["payload"] = json.loads(item.pop("payload_json")); result.append(item)
+        return result
+
+    def orderbook_events(self, symbol: str = "BTCUSDT", market: str = "spot", since_ms: int | None = None, limit: int = 50000) -> list[dict[str, Any]]:
+        where = "WHERE symbol = ? AND market = ?" + (" AND timestamp_ms >= ?" if since_ms is not None else "")
+        params: list[Any] = [symbol, market] + ([since_ms] if since_ms is not None else []) + [limit]
+        rows = self.conn.execute(f"SELECT * FROM orderbook_events_raw {where} ORDER BY timestamp_ms, id LIMIT ?", params).fetchall()
+        result = []
+        for row in rows:
+            item = dict(row)
+            if item.get("payload_json"):
+                item["payload"] = json.loads(item.pop("payload_json"))
+            result.append(item)
+        return result
+
+    def calibration(self, symbol: str = "BTCUSDT", horizon_minutes: int = 60) -> list[dict[str, Any]]:
+        rows = self.conn.execute("SELECT * FROM probability_calibration WHERE symbol = ? AND horizon_minutes = ? ORDER BY score_low", (symbol, horizon_minutes)).fetchall()
+        return [dict(row) for row in rows]
+
     def liquidation_window(self, symbol: str = "BTCUSDT", since_ms: int | None = None) -> dict[str, float]:
         where = "WHERE symbol = ?" + (" AND timestamp_ms >= ?" if since_ms else "")
         params: list[Any] = [symbol]
@@ -157,10 +259,13 @@ class CapitalFlowStore:
         rows = self.conn.execute(f"SELECT * FROM {table} {where} ORDER BY timestamp_ms, aggregate_trade_id LIMIT ?", params).fetchall()
         return [AggTrade(market, row["symbol"], row["timestamp_ms"], row["aggregate_trade_id"], row["price"], row["quantity_btc"], row["notional_usd"], bool(row["buyer_is_maker"]), row["aggressor_side"]) for row in rows]
 
-    def latest(self, table: str, symbol: str = "BTCUSDT") -> dict[str, Any] | None:
+    def latest(self, table: str, symbol: str = "BTCUSDT", market: str = "spot") -> dict[str, Any] | None:
         if table not in {"oi_raw", "funding_raw", "top_trader_accounts_raw", "top_trader_positions_raw", "orderbook_raw"}:
             raise ValueError("unsupported latest table")
-        rows = self.conn.execute(f"SELECT * FROM {table} WHERE symbol = ? ORDER BY timestamp_ms DESC LIMIT 1", (symbol,)).fetchall()
+        if table == "orderbook_raw":
+            rows = self.conn.execute(f"SELECT * FROM {table} WHERE symbol = ? AND market = ? ORDER BY timestamp_ms DESC LIMIT 1", (symbol, market)).fetchall()
+        else:
+            rows = self.conn.execute(f"SELECT * FROM {table} WHERE symbol = ? ORDER BY timestamp_ms DESC LIMIT 1", (symbol,)).fetchall()
         if not rows:
             return None
         row = dict(rows[0])
@@ -170,7 +275,7 @@ class CapitalFlowStore:
 
     def health(self) -> dict[str, Any]:
         tables = {}
-        for table in ("spot_aggtrades_raw", "futures_aggtrades_raw", "orderbook_raw", "oi_raw", "funding_raw", "liquidations_raw", "global_ls_raw"):
+        for table in ("spot_aggtrades_raw", "futures_aggtrades_raw", "orderbook_raw", "orderbook_events_raw", "oi_raw", "funding_raw", "liquidations_raw", "global_ls_raw", "probability_target_snapshots", "target_outcomes"):
             tables[table] = self.conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         return {"path": str(self.path), "status": "PASS", "tables": tables}
 

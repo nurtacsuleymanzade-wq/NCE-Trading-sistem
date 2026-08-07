@@ -158,6 +158,26 @@
         .decision-target { color:#58a6ff; font-size:1.25rem; font-weight:800; }
         .decision-table { width:100%; border-collapse:collapse; font-size:.86rem; }
         .decision-table th,.decision-table td { padding:8px 7px; border-bottom:1px solid #30363d; text-align:left; vertical-align:top; }
+        .pm-engine { display:flex; flex-direction:column; gap:14px; }
+        .pm-summary { background:linear-gradient(135deg,#111827,#161b22); border:1px solid #30363d; border-radius:8px; padding:18px; }
+        .pm-summary h3 { color:#58a6ff; margin:0 0 8px; }
+        .pm-summary p { margin:0; line-height:1.55; color:#c9d1d9; }
+        .pm-controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+        .pm-controls button { background:#0d1117; color:#c9d1d9; border:1px solid #30363d; border-radius:5px; padding:6px 10px; cursor:pointer; }
+        .pm-controls button.on { background:#1f6feb; border-color:#58a6ff; color:#fff; }
+        .pm-targets { width:100%; border-collapse:collapse; font-size:.82rem; }
+        .pm-targets th,.pm-targets td { padding:8px 6px; border-bottom:1px solid #30363d; text-align:left; white-space:nowrap; }
+        .pm-targets th { color:#8b949e; font-weight:600; }
+        .pm-targets .down { color:#f85149; } .pm-targets .up { color:#3fb950; }
+        .pm-targets-wrap { overflow-x:auto; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px; }
+        .pm-legend { display:flex; flex-wrap:wrap; gap:8px; color:#8b949e; font-size:.78rem; }
+        .pm-legend span { border:1px solid #30363d; border-radius:12px; padding:4px 8px; }
+        .pm-bar { display:inline-block; height:7px; min-width:3px; border-radius:4px; background:#58a6ff; vertical-align:middle; margin-right:5px; }
+        .pm-detail { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:10px; }
+        .pm-detail .term-card { min-height:90px; }
+        .pm-muted { color:#8b949e; }
+        .pm-estimated { color:#f2cc60; font-weight:700; }
+        .pm-unavailable { color:#f85149; font-weight:700; }
         .decision-table th { color:#8b949e; font-weight:600; }
         .decision-table td:nth-child(2),.decision-table td:nth-child(3) { text-align:center; white-space:nowrap; font-weight:800; }
         .decision-table .decision-detail { color:#8b949e; font-weight:400; }
@@ -1021,8 +1041,9 @@
           var dir=upSum>downSum?'UP':(downSum>upSum?'DOWN':'WAIT'), best=dir==='UP'?upBest:(dir==='DOWN'?downBest:null);
           var historical=prob.probability||{}, marketDir=prob.prediction==='up'?'UP':(prob.prediction==='down'?'DOWN':'RANGE');
           function scoreBar(cls,v){ return '<span class="mpf-bar '+cls+'" style="width:'+mpClamp(v==null?0:v,0,100)+'%"></span>'; }
+          var currentLevel=scored.reduce(function(best,x){ return !best || Math.abs(x.price-current)<Math.abs(best.price-current)?x:best; },null);
           function row(x){
-            var isCurrent=current!=null&&Math.abs(x.price-current)/current<.0008;
+            var isCurrent=currentLevel===x;
             return '<div class="mpf-row '+(isCurrent?'current':'')+'"><div class="mpf-price">$'+fmtNum(x.price,2)+'<small>'+esc(isCurrent?'CURRENT':x.labels.join(' · '))+'</small></div><div class="mpf-bars" title="Attraction / Accessibility / Friction">'+scoreBar('mpf-attract',x.attraction)+scoreBar('mpf-access',x.accessibility)+scoreBar('mpf-friction',x.friction)+'</div><div class="mpf-row-meta"><b>'+esc(x.direction==='up'?'↑ '+x.label:'↓ '+x.label)+'</b> · Potential <b>'+mpPct(x.potential)+'</b><br>Attraction '+mpPct(x.attraction)+' · Access '+mpPct(x.accessibility)+' · Friction '+mpPct(x.friction)+'<br><span class="mpf-source">'+esc(x.source)+' · '+esc(x.coverage.attraction)+' attraction inputs / '+esc(x.coverage.access)+' access inputs</span></div></div>'; }
           var axis=scored.length?scored.sort(function(a,b){return b.price-a.price;}).slice(0,24).map(row).join(''):'<div class="mpf-note">Fiyat ekseni oluşturulamadı; güncel fiyat veya profile/order book seviyeleri mevcut değil.</div>';
           function route(x,label){ return '<div class="mpf-route"><b>'+esc(label)+'</b><div class="route-line">'+(x?'$'+fmtNum(x.price,2)+' · '+esc(x.label)+' · target potential '+mpPct(x.potential):'UNAVAILABLE')+'</div><div class="route-note">'+(x?'Attraction '+mpPct(x.attraction)+' · Accessibility '+mpPct(x.accessibility)+' · Friction '+mpPct(x.friction):'Bu yönde yeterli gerçek kaynak bulunamadı.')+'</div></div>'; }
@@ -1036,6 +1057,18 @@
           html+='<div class="mpf-card"><span class="mpf-label">Force / flow separation</span><div class="mpf-inputs"><span class="mpf-input"><span>Order Flow delta</span><b>'+ (flow.aggression_balance_pct!=null?fmtNum(flow.aggression_balance_pct,2)+'%':'UNAVAILABLE')+'</b></span><span class="mpf-input"><span>Price response</span><b>'+ (flow.price_change_pct!=null?fmtNum(flow.price_change_pct,3)+'%':'UNAVAILABLE')+'</b></span><span class="mpf-input"><span>OI context</span><b>'+esc(ctx.open_interest_proxy||'UNAVAILABLE')+'</b></span><span class="mpf-input"><span>Squeeze context</span><b>'+esc(ctx.liquidation_squeeze_proxy||'UNAVAILABLE')+'</b></span><span class="mpf-input"><span>Funding</span><b>'+ (d.funding&&d.funding.lastFundingRate!=null?fmtNum(Number(d.funding.lastFundingRate)*100,4)+'%':'UNAVAILABLE')+'</b></span><span class="mpf-input"><span>Capital regime</span><b>'+esc((mf.diagnosis&&mf.diagnosis.regime)||'UNAVAILABLE')+'</b></span></div></div>';
           html+='<div class="mpf-source">Updated '+esc(d.time_utc||'UNKNOWN')+' · '+esc(d.methodology||'Derived field')+' · Liquidation levels are shown only when a verified liquidation-cluster source is present.</div></div>';
           return html;
+        }
+
+        var probabilityMapMarket = 'futures';
+        function pmMoney(value){ return value == null ? 'UNAVAILABLE' : '$'+fmtNum(value,0); }
+        function probabilityMapView(j) {
+          var targets=j.targets||[], primary=j.primaryTarget||targets[0]||{}, p=primary.probability||{}, liq=j.liquidity||{}, lm=j.liquidations||{}, hp=j.volumeProfile||{}, health=j.dataHealth||[], fmtP=function(x){return x==null?'<span class="pm-unavailable">UNAVAILABLE</span>':fmtNum(x*100,0)+'%';};
+          var targetRows=targets.map(function(x){var q=x.probability||{}, cls=x.direction==='UP'?'decision-long':'decision-short';return '<tr><td class="'+cls+'"><b>$'+fmtNum(x.targetCenter,2)+'</b><br><span class="pm-muted">$'+fmtNum(x.targetLow,2)+' – $'+fmtNum(x.targetHigh,2)+'</span></td><td>'+esc((x.types||[]).join(' + '))+'</td><td>'+fmtNum(x.distancePct,2)+'% / '+fmtNum(x.distanceAtr,2)+' ATR</td><td>'+fmtNum(x.attractionScore,0)+'/100</td><td>'+fmtP(q.hit15m)+'</td><td>'+fmtP(q.hit30m)+'</td><td>'+fmtP(q.hit1h)+'</td><td>'+fmtP(q.hit4h)+'</td><td>'+fmtP(q.firstHit)+'</td><td>'+fmtNum((x.eta||{}).medianMinutes,0)+'m<br><span class="pm-muted">'+fmtNum((x.eta||{}).p25Minutes,0)+'–'+fmtNum((x.eta||{}).p75Minutes,0)+'m</span></td><td>'+fmtNum(x.confidence,0)+'</td></tr>';}).join('');
+          var liqRows=(liq.levels||[]).slice(0,15).map(function(x){return '<tr><td>'+esc(x.side)+'</td><td>$'+fmtNum(x.price,2)+'</td><td>'+pmMoney(x.displayed_liquidity)+'</td><td>'+pmMoney(x.executed_liquidity)+'</td><td>'+pmMoney(x.cancelled_liquidity)+'</td><td>'+pmMoney(x.replenished_liquidity)+'</td><td>'+esc(x.classification||'UNCONFIRMED')+'</td></tr>';}).join('');
+          var liqMapRows=(lm.zones||[]).slice(0,15).map(function(x){return '<tr><td class="pm-estimated">'+esc(x.side)+'</td><td>$'+fmtNum(x.price_low,2)+' – $'+fmtNum(x.price_high,2)+'</td><td>'+pmMoney(x.estimated_notional)+'</td><td>'+fmtNum(x.distance_atr,2)+'</td><td>'+fmtP(x.cascade_probability)+'</td><td>'+fmtNum(x.confidence,0)+'</td></tr>';}).join('');
+          var healthRows=health.map(function(x){return '<tr><td>'+esc(x.source)+'</td><td>'+esc(x.status||'UNAVAILABLE')+'</td><td>'+fmtNum((x.coverage||0)*100,0)+'%</td><td>'+fmtNum(x.confidence,0)+'</td><td>'+esc(x.reason||'—')+'</td></tr>';}).join('');
+          var evidence=function(a){return '<ul>'+(a&&a.length?a.map(function(x){return '<li>'+esc(x)+'</li>';}).join(''):'<li>UNAVAILABLE</li>')+'</ul>';};
+          return '<div class="pm-engine"><div class="pm-summary"><div class="cf-kicker">NCE PROBABILITY MAP ENGINE</div><h3>PROBABILITY MAP SUMMARY</h3><p>'+esc(j.summary||'Yeterli gerçek veriyle hedef özeti üretilemedi.')+'</p><div class="pm-legend" style="margin-top:12px"><span>Liquidity Engine: REAL</span><span class="pm-estimated">Liquidation Engine: ESTIMATED</span><span>Probability: '+esc((j.rules||{}).probabilityStatus||'UNAVAILABLE')+'</span><span>Score ≠ Probability</span></div></div><div class="pm-controls"><b>Heatmap market</b><button class="'+(probabilityMapMarket==='futures'?'on':'')+'" onclick="probabilityMapMarket=\'futures\';setTab(activePanelName,true)">Futures</button><button class="'+(probabilityMapMarket==='spot'?'on':'')+'" onclick="probabilityMapMarket=\'spot\';setTab(activePanelName,true)">Spot</button><span class="pm-muted">Resting notional and estimated liquidation notional have separate meanings.</span></div><div class="term-grid">'+pill('Current price',!!j.currentPrice,'$'+fmtNum(j.currentPrice,2))+pill('Primary target',!!primary.targetCenter,primary.targetCenter?'$'+fmtNum(primary.targetCenter,2):'UNAVAILABLE')+pill('P(1h)',p.hit1h!=null,p.hit1h!=null?fmtNum(p.hit1h*100,0)+'%':'UNAVAILABLE')+pill('First-hit',p.firstHit!=null,p.firstHit!=null?fmtNum(p.firstHit*100,0)+'%':'UNAVAILABLE')+pill('ETA',!!(primary.eta||{}).medianMinutes,primary.eta&&primary.eta.medianMinutes?fmtNum(primary.eta.medianMinutes,0)+'m':'UNAVAILABLE')+pill('Confidence',primary.confidence!=null,primary.confidence!=null?fmtNum(primary.confidence,0):'UNAVAILABLE')+'</div><div class="pm-targets-wrap"><h3>TOP PROBABILITY TARGETS</h3><table class="pm-targets"><thead><tr><th>Zone</th><th>Type / confluence</th><th>Distance</th><th>Attraction</th><th>P15</th><th>P30</th><th>P1h</th><th>P4h</th><th>First-hit</th><th>ETA</th><th>Confidence</th></tr></thead><tbody>'+targetRows+'</tbody></table>'+(targets.length?'':'<div class="pm-muted">No candidate target is supported by available data.</div>')+'</div><div class="pm-detail">'+card('WHY',evidence(primary.why))+card('AGAINST',evidence(primary.against))+card('MISSING',evidence(primary.missing),'backend-warn')+card('Volume Profile','POC: <b>$'+fmtNum(hp.poc,2)+'</b><br>VAH: $'+fmtNum(hp.vah,2)+' · VAL: $'+fmtNum(hp.val,2)+'<br>Status: '+esc(hp.status||'UNAVAILABLE'))+'</div><div class="pm-targets-wrap"><h3>LIQUIDITY ENGINE · '+esc((j.market||probabilityMapMarket).toUpperCase())+'</h3><div class="pm-muted">ADDED / RESTING / EXECUTED / CANCELLED / REPLENISHED / DEPLETED remain separate; displayed wall is not executed flow.</div><table class="pm-targets"><thead><tr><th>Side</th><th>Price</th><th>Displayed</th><th>Executed</th><th>Cancelled</th><th>Replenished</th><th>Classification</th></tr></thead><tbody>'+liqRows+'</tbody></table></div><div class="pm-targets-wrap"><h3 class="pm-estimated">ESTIMATED LIQUIDATION HEATMAP</h3><div class="pm-muted">Binance public data cannot reveal all account liquidation prices. These are OI-cohort projections and must not be read as observed account totals.</div><table class="pm-targets"><thead><tr><th>Side</th><th>Zone</th><th>Estimated notional</th><th>Distance ATR</th><th>Cascade</th><th>Confidence</th></tr></thead><tbody>'+liqMapRows+'</tbody></table></div><div class="pm-targets-wrap"><h3>PROBABILITY MAP DATA HEALTH</h3><table class="pm-targets"><thead><tr><th>Source</th><th>Status</th><th>Coverage</th><th>Confidence</th><th>Reason</th></tr></thead><tbody>'+healthRows+'</tbody></table></div><div class="decision-meta">'+esc(j.tradeContract||'Research/ranking output only; no automatic execution.')+'</div></div>';
         }
 
         function terminalView(name, j) {
@@ -1056,7 +1089,7 @@
           } else if (name === 'Real Trading / Paper') {
             return realTradingPaperView(j);
           } else if (name === 'Olasılık Haritası') {
-            return probabilityFieldView(j);
+            return probabilityMapView(j);
             /* Legacy calibrated view retained below for reference/backward compatibility. */
             var prob = j.probability || {}, met = j.metrics || {}, proof = j.no_lookahead_proof || {}, rules = j.rules || {};
             if (j.status !== 'PASS') {
@@ -1077,13 +1110,7 @@
           } else if (name === 'Long/Short Skoru') {
             return decisionEngineView(j);
           } else if (name === 'Likidite ve Liquidation Haritası') {
-            var l = j.liquidity || {}, m = j.microstructure || {}, d = j.derivatives || {};
-            html += card('Liquidity levels', listObj(l.levels || {}));
-            html += card('Equal highs/lows', 'Equal highs: <b>' + esc(l.equal_high_count||0) + '</b><br>Equal lows: <b>' + esc(l.equal_low_count||0) + '</b>');
-            html += card('Recent FVG zones', (l.fair_value_gaps_recent||[]).slice(-6).map(function(x){ return esc(x.type)+' @ '+esc(x.time)+' ['+esc(x.low)+' → '+esc(x.high)+']'; }).join('<br>')||'No recent FVG zone detected');
-            html += card('Microstructure proxy', listObj(m.metrics||{}));
-            html += card('Derivatives/liquidation proxy', listObj(d.context||{}));
-            if (j.warning) html += card('Data warning', esc(j.warning), 'backend-warn');
+            return probabilityMapView(j);
           } else if (name === 'Options') {
             html += card('Available derivatives context', listObj(j.context||{}));
             html += card('Missing true options feed', esc((j.missing_external_data||[]).join(', ')||'No missing fields reported'), 'backend-warn');
@@ -1195,10 +1222,10 @@
           var map = {
             'Trader Hova': function() { return requestJson('/api/v1/hova/chat', { method: 'POST', requestSeq: panelRequestSeq, timeframe: tf, symbol: SYMBOL, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'terminal_state', timeframe: tf, source: 'website' }) }); },
             'Long/Short Skoru': function() { return fetchRealDecision(tf); },
-            'Olasılık Haritası': function() { return loadProbabilityField(tf); },
+            'Olasılık Haritası': function() { return apiGet('/api/v1/probability-map/summary?tf=' + encodeURIComponent(tf) + '&market=' + encodeURIComponent(probabilityMapMarket)); },
             'Order Flow': function() { return apiGet('/api/v1/orderflow/state?tf=' + encodeURIComponent(tf)); },
             'Money Flow': function() { return loadMoneyFlowLocal(tf); },
-            'Likidite ve Liquidation Haritası': function() { return loadLiquidityMapLocal(tf).catch(function(e){ console.warn('orderbook liquidity failed', e && e.message || e); return Promise.all([apiGet('/api/v1/liquidity/state?tf=' + encodeURIComponent(tf)), apiGet('/api/v1/microstructure/state?tf=' + encodeURIComponent(tf)), apiGet('/api/v1/derivatives/context?tf=' + encodeURIComponent(tf))]).then(function(a){ return { status: a[0].status, time_utc: a[0].time_utc, symbol: a[0].symbol, timeframe: a[0].timeframe, liquidity: a[0], microstructure: a[1], derivatives: a[2], warning: 'Orderbook depth unavailable; showing backend proxy liquidity.' }; }); }); },
+            'Likidite ve Liquidation Haritası': function() { return apiGet('/api/v1/probability-map/summary?tf=' + encodeURIComponent(tf) + '&market=' + encodeURIComponent(probabilityMapMarket)); },
             'Options': function() { return apiGet('/api/v1/derivatives/context?tf=' + encodeURIComponent(tf)); },
             'Volume/Market Profile': function() { return Promise.all([apiGet('/api/v1/profile/state?tf=' + encodeURIComponent(tf)), apiGet('/api/v1/vwap/state?tf=' + encodeURIComponent(tf)), apiGet('/api/v1/sessions/state?tf=' + encodeURIComponent(tf))]).then(function(a){ return { status: a[0].status, time_utc: a[0].time_utc, symbol: a[0].symbol, timeframe: a[0].timeframe, volume_profile: a[0], vwap: a[1], sessions: a[2] }; }); },
             'Smart Money': function() { return loadSmartMoneyLocal(tf); },
@@ -1641,6 +1668,7 @@
         resizeChartSafe();
         setWsLabel();
         loadTF(curTF);
+        if (initialPanel) setTab(initialPanel, true);
         setInterval(function(){ if (curTF !== '1s') showStats(curTF, curData); }, 60000);
 
         /* ====== UMPE Functions ====== */

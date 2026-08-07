@@ -79,6 +79,13 @@ def test_depth_reconciler_requires_contiguous_update_ids():
     assert book.last_update_id == 11
 
 
+def test_futures_depth_reconciler_rejects_previous_pointer_gap():
+    book = DepthReconciler()
+    book.seed({"lastUpdateId": 10, "bids": [[100, "1"]], "asks": [[101, "1"]]})
+    assert book.apply({"U": 11, "u": 11, "pu": 9, "bids": [], "asks": []}) is False
+    assert book.needs_resync is True
+
+
 def test_raw_store_is_additive_and_round_trips_trade(tmp_path):
     store = CapitalFlowStore(tmp_path / "flow.sqlite3")
     trade = normalize_agg_trade(raw(), "spot")

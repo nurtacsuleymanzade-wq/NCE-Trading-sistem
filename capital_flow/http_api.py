@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import json
 import statistics
+import time
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -12,6 +13,14 @@ from .engine import CapitalFlowEngine
 from .interpretation import build_interpretation
 from .storage import CapitalFlowStore, read_heartbeat
 from .horizons import build_horizon_states
+from .probability_map import (
+    build_liquidity_heatmap,
+    build_oi_cohorts,
+    build_probability_targets,
+    data_health as probability_data_health,
+    liquidation_zones,
+    volume_profile,
+)
 
 
 TF_SECONDS = {"1s": 1, "5s": 5, "15s": 15, "30s": 30, "1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "24h": 86400}
@@ -116,6 +125,7 @@ def create_router(db_path: str | None = None):
     heartbeat_path = os.environ.get("NCE_CAPITAL_FLOW_HEARTBEAT", "/var/lib/nce-trading/capital_flow_heartbeat.json")
     context_path = Path(os.environ.get("NCE_CAPITAL_FLOW_CONTEXT_STATE", "/var/lib/nce-trading/capital_flow_context.json"))
     historical_path = Path(os.environ.get("NCE_CAPITAL_FLOW_HISTORICAL_SUMMARY", "/var/lib/nce-trading/capital_flow/historical/validation_summary.json"))
+    probability_calibration_path = Path(os.environ.get("NCE_PROBABILITY_MAP_CALIBRATION", str(historical_path.parent / "calibration" / "target_probability.json")))
 
     def external_context() -> dict[str, Any]:
         if not context_path.exists():
@@ -131,6 +141,77 @@ def create_router(db_path: str | None = None):
             return value
         except (OSError, ValueError, TypeError):
             return {"status": "UNRELIABLE", "reason": "external context state is invalid"}
+
+    def probability_map_snapshot(tf: str, symbol: str, market: str = "futures") -> dict[str, Any]:
+        """Assemble the three engines from raw/derived store data.
+
+        This endpoint is read-only. If target-level calibration is absent it
+        returns attraction scores and ``None`` probabilities instead of
+        promoting a score to a probability.
+        """
+        symbol = symbol.upper()
+        if tf not in TF_SECONDS:
+            return {"status": "UNRELIABLE", "time_utc": _now(), "warning": f"unsupported timeframe: {tf}", "allowed": sorted(TF_SECONDS)}
+        store = CapitalFlowStore(database)
+        try:
+            engine = load_engine(database, symbol, tf)
+            state = engine.snapshot(TF_SECONDS[tf])
+            trades = list(engine.futures_trades or engine.spot_trades)
+            latest_book = store.latest("orderbook_raw", symbol, market)
+            book = (latest_book or {}).get("payload") or {}
+            mid = None
+            if book.get("bids") and book.get("asks"):
+                mid = (float(book["bids"][0][0]) + float(book["asks"][0][0])) / 2
+            current_price = float(trades[-1].price) if trades else (mid or 0.0)
+            prices = [{"price": x.price, "notional": x.notional_usd} for x in trades[-50000:]]
+            profile = volume_profile(prices)
+            price_changes = [abs(trades[i].price - trades[i - 1].price) for i in range(max(1, len(trades) - 500), len(trades))]
+            atr = statistics.median(price_changes) * 14 if price_changes else None
+            since_ms = int(datetime.now(timezone.utc).timestamp() * 1000) - 4 * 3600 * 1000
+            events = store.orderbook_events(symbol, market, since_ms=since_ms, limit=50000)
+            snapshots = store.orderbook_history(symbol, market, limit=120)
+            liquidity = build_liquidity_heatmap(snapshots, events, current_price, timeframe=tf, atr=atr)
+            oi_history = engine.oi_history or []
+            cohorts = build_oi_cohorts(oi_history, current_price, volatility=(atr / current_price if current_price else None))
+            liq_zones = liquidation_zones(cohorts, current_price, atr=atr)
+            liq_actual = state.get("liquidations") or {"value": None, "metadata": {"status": "UNAVAILABLE"}}
+            flow_value = (state.get("futures") or {}).get("value") or {}
+            oi_value = state.get("oi") or {}
+            funding_value = state.get("funding") or {}
+            flow = {"futures_cvd": flow_value.get("cvd"), "spot_cvd": ((state.get("spot") or {}).get("value") or {}).get("cvd"), "delta": flow_value.get("delta_usd"), "price_velocity": flow_value.get("price_change")}
+            positioning = {"OI": oi_value.get("value"), "delta_OI": oi_value.get("delta"), "funding": funding_value.get("rate")}
+            candidates = __import__("capital_flow.probability_map", fromlist=["generate_candidates"]).generate_candidates(current_price, liquidation=liq_zones, liquidity=liquidity.get("levels", []), profile=profile, atr=atr)
+            calibration_rows = {60: store.calibration(symbol, 60), 15: store.calibration(symbol, 15), 30: store.calibration(symbol, 30), 240: store.calibration(symbol, 240)}
+            if probability_calibration_path.exists() and not any(calibration_rows.values()):
+                try:
+                    raw_calibration = json.loads(probability_calibration_path.read_text())
+                    calibration_rows = {int(k): v for k, v in raw_calibration.items()} if isinstance(raw_calibration, dict) else calibration_rows
+                except (OSError, ValueError, TypeError):
+                    pass
+            targets = build_probability_targets(current_price, candidates, calibration=calibration_rows, atr=atr, liquidity_levels=liquidity.get("levels", []), profile=profile, flow=flow, positioning=positioning)
+            for target in targets:
+                target["estimatedLiquidation"] = target.get("estimatedNotional", 0.0)
+                target["types"] = sorted(set(target.get("types", [])))
+                target["targetCenter"] = round(target["targetCenter"], 2)
+                target["targetLow"] = round(target["targetLow"], 2)
+                target["targetHigh"] = round(target["targetHigh"], 2)
+            health = probability_data_health({
+                "Orderbook": {"status": "REAL" if events or snapshots else "UNAVAILABLE", "coverage": 1.0 if events or snapshots else 0.0, "confidence": 98 if events else None, "reason": None if events else "no orderbook lifecycle archive"},
+                "AggTrades": {"status": "REAL" if trades else "UNAVAILABLE", "coverage": 1.0 if trades else 0.0, "confidence": 98 if trades else None},
+                "OI": {"status": (oi_value.get("metadata") or {}).get("status", "UNAVAILABLE"), "coverage": 1.0 if oi_history else 0.0, "confidence": (oi_value.get("metadata") or {}).get("confidence")},
+                "Funding": {"status": (funding_value.get("metadata") or {}).get("status", "UNAVAILABLE"), "coverage": 1.0 if funding_value else 0.0},
+                "Liquidation Model": {"status": "ESTIMATED" if cohorts else "UNAVAILABLE", "coverage": 1.0 if cohorts else 0.0, "confidence": 24 if cohorts else None, "reason": "public data does not expose all account liquidation prices"},
+                "Historical Model": {"status": "CALIBRATED" if any(calibration_rows.values()) else "UNAVAILABLE", "coverage": 1.0 if any(calibration_rows.values()) else 0.0, "confidence": None if not any(calibration_rows.values()) else 60},
+            })
+            primary = targets[0] if targets else None
+            direction_word = "aşağıdaki" if primary and primary.get("direction") == "DOWN" else "yukarıdaki"
+            summary_text = (f"BTC mevcut durumda {direction_word} {primary['targetCenter']:,.2f} bölgesine yönelen en erişilebilir aday olarak görünüyor; " + "kalibre edilmiş hedef olasılığı mevcut değil." if primary and primary.get("status") != "CALIBRATED" else f"BTC için birincil hedef {primary['targetCenter']:,.2f} bölgesi." if primary else "Yeterli gerçek piyasa verisiyle aday hedef üretilemedi.")
+            return {
+                "status": "PASS" if current_price else "UNAVAILABLE", "schemaVersion": "probability-map-v1", "time_utc": _now(), "timestamp": int(time.time() * 1000), "symbol": symbol, "timeframe": tf, "market": market.upper(), "currentPrice": current_price, "atr": atr,
+                "summary": summary_text, "primaryTarget": primary, "targets": targets, "liquidity": liquidity, "liquidations": {"status": "ESTIMATED" if liq_zones else "UNAVAILABLE", "zones": liq_zones, "observed": liq_actual, "methodology": "OI cohorts and leverage prior; not all account liquidation prices are public"}, "volumeProfile": profile, "flow": flow, "positioning": positioning, "dataHealth": health, "rules": {"scoreIsProbability": False, "probabilityStatus": "CALIBRATED" if any(calibration_rows.values()) else "UNAVAILABLE", "liquidationStatus": "ESTIMATED"}, "tradeContract": "Research/ranking output only; no automatic execution, entry, stop or RR authorization.",
+            }
+        finally:
+            store.close()
 
     def snapshot(tf: str, symbol: str):
         if tf not in TF_SECONDS:
@@ -236,5 +317,38 @@ def create_router(db_path: str | None = None):
     @router.get("/capital-flow/historical-context")
     def historical_context(regime: str = Query("NO_CLEAR_EDGE"), oi_state: str | None = Query(None), divergence: str | None = Query(None)):
         return _historical_context(historical_path, regime, oi_state, divergence)
+
+    @router.get("/probability-map/summary")
+    def probability_map_summary(tf: str = Query("5m"), symbol: str = Query("BTCUSDT"), market: str = Query("futures")):
+        return probability_map_snapshot(tf, symbol, market)
+
+    @router.get("/probability-map/targets")
+    def probability_map_targets(tf: str = Query("5m"), symbol: str = Query("BTCUSDT"), market: str = Query("futures")):
+        value = probability_map_snapshot(tf, symbol, market)
+        return {"status": value.get("status"), "schemaVersion": value.get("schemaVersion"), "symbol": value.get("symbol"), "timestamp": value.get("timestamp"), "currentPrice": value.get("currentPrice"), "targets": value.get("targets", []), "rules": value.get("rules", {})}
+
+    @router.get("/probability-map/liquidity")
+    def probability_map_liquidity(tf: str = Query("5m"), symbol: str = Query("BTCUSDT"), market: str = Query("futures")):
+        value = probability_map_snapshot(tf, symbol, market)
+        return {"status": value.get("status"), "symbol": value.get("symbol"), "timestamp": value.get("timestamp"), "market": value.get("market"), "liquidity": value.get("liquidity"), "dataHealth": value.get("dataHealth", [])}
+
+    @router.get("/probability-map/liquidations")
+    def probability_map_liquidations(tf: str = Query("5m"), symbol: str = Query("BTCUSDT")):
+        value = probability_map_snapshot(tf, symbol, "futures")
+        return {"status": value.get("status"), "symbol": value.get("symbol"), "timestamp": value.get("timestamp"), "liquidations": value.get("liquidations"), "rules": {"label": "ESTIMATED", "realAccountDistribution": False}}
+
+    @router.get("/probability-map/history")
+    def probability_map_history(symbol: str = Query("BTCUSDT"), limit: int = Query(100, ge=1, le=1000)):
+        store = CapitalFlowStore(database)
+        try:
+            rows = store.conn.execute("SELECT * FROM probability_target_snapshots WHERE symbol = ? ORDER BY timestamp_ms DESC LIMIT ?", (symbol.upper(), limit)).fetchall()
+            return {"status": "DERIVED" if rows else "UNAVAILABLE", "symbol": symbol.upper(), "rows": [dict(row) for row in rows], "methodology": "append-only target snapshots; outcomes are separate"}
+        finally:
+            store.close()
+
+    @router.get("/probability-map/data-health")
+    def probability_map_data_health(symbol: str = Query("BTCUSDT"), tf: str = Query("5m")):
+        value = probability_map_snapshot(tf, symbol, "futures")
+        return {"status": value.get("status"), "symbol": value.get("symbol"), "timestamp": value.get("timestamp"), "sources": value.get("dataHealth", []), "rules": value.get("rules", {})}
 
     return router

@@ -10,6 +10,7 @@ import time
 from typing import Any, Awaitable, Callable
 
 from .engine import normalize_agg_trade
+from .probability_map import liquidity_lifecycle
 from .storage import CapitalFlowStore
 
 
@@ -17,6 +18,7 @@ SPOT_WS = "wss://stream.binance.com:9443/ws/{symbol}@aggTrade"
 FUTURES_WS = "wss://fstream.binance.com/ws/{symbol}@aggTrade"
 FORCE_ORDER_WS = "wss://fstream.binance.com/ws/{symbol}@forceOrder"
 SPOT_DEPTH_WS = "wss://stream.binance.com:9443/ws/{symbol}@depth@100ms"
+FUTURES_DEPTH_WS = "wss://fstream.binance.com/ws/{symbol}@depth@100ms"
 
 
 class SingleOwnerLock:
@@ -59,11 +61,17 @@ class DepthReconciler:
         self.last_update_id: int | None = None
         self.book: dict[str, Any] | None = None
         self.needs_resync = True
+        self.last_events: list[dict[str, Any]] = []
 
     def seed(self, snapshot: dict[str, Any]) -> None:
         self.book = {"bids": snapshot.get("bids", []), "asks": snapshot.get("asks", [])}
         self.last_update_id = int(snapshot.get("lastUpdateId", 0))
         self.needs_resync = False
+        self.last_events = liquidity_lifecycle(None, self.book, timestamp_ms=int(snapshot.get("E", 0) or 0) or None, update_id=self.last_update_id)
+
+    def drain_events(self) -> list[dict[str, Any]]:
+        events, self.last_events = self.last_events, []
+        return events
 
     def apply(self, event: dict[str, Any]) -> bool:
         first = int(event.get("U", 0))
@@ -71,11 +79,19 @@ class DepthReconciler:
         if self.book is None or self.last_update_id is None or first > self.last_update_id + 1:
             self.needs_resync = True
             return False
+        # USD-M Futures depth also carries ``pu``; accepting a mismatched
+        # previous-update pointer would silently create a stale book.
+        previous_pointer = event.get("pu")
+        if previous_pointer is not None and int(previous_pointer) != self.last_update_id:
+            self.needs_resync = True
+            return False
         if last <= self.last_update_id:
             return True
         if not (first <= self.last_update_id + 1 <= last):
             self.needs_resync = True
             return False
+
+        before = {"bids": list(self.book.get("bids", [])), "asks": list(self.book.get("asks", []))}
 
         def update(key: str) -> None:
             levels = {str(p): str(q) for p, q in self.book.get(key, [])}
@@ -91,6 +107,7 @@ class DepthReconciler:
         update("bids")
         update("asks")
         self.last_update_id = last
+        self.last_events = liquidity_lifecycle(before, self.book, timestamp_ms=int(event.get("E", 0) or 0) or None, update_id=last)
         return True
 
 
@@ -102,7 +119,8 @@ class BinancePublicCollector:
         self.symbol = symbol.lower()
         self.running = True
         self.depth = DepthReconciler()
-        self.last_orderbook_persist_ms = 0
+        self.futures_depth = DepthReconciler()
+        self.last_orderbook_persist_ms = {"spot": 0, "futures": 0}
         self.sockets: set[Any] = set()
         self.reconnect_count = 0
         self.error_count = 0
@@ -112,6 +130,7 @@ class BinancePublicCollector:
             "spot_ws_alive": False,
             "futures_ws_alive": False,
             "depth_alive": False,
+            "futures_depth_alive": False,
             "liquidation_ws_alive": False,
             "last_spot_trade": None,
             "last_futures_trade": None,
@@ -199,6 +218,15 @@ class BinancePublicCollector:
         async def handle(payload: dict[str, Any]) -> None:
             trade = normalize_agg_trade(payload, "spot", self.symbol.upper())
             self.store.insert_trade(trade, int(time.time() * 1000))
+            # This is observed aggressive execution. It is deliberately
+            # stored separately from depth cancellation/depletion events.
+            self.store.insert_orderbook_events(self.symbol.upper(), "spot", [{
+                "timestamp_ms": trade.timestamp, "price": trade.price,
+                "side": "ASK" if trade.aggressor_side == "BUY" else "BID",
+                "quantity": trade.quantity_btc, "notional": trade.notional_usd,
+                "action": "EXECUTED", "remaining_quantity": 0,
+                "status": "REAL", "source": "Binance Spot aggTrade",
+            }])
             self.health["last_spot_trade"] = trade.timestamp
         await self._stream(SPOT_WS.format(symbol=self.symbol), handle)
 
@@ -220,12 +248,15 @@ class BinancePublicCollector:
             self.health["last_liquidation"] = int(payload.get("E", time.time() * 1000))
         await self._stream(FORCE_ORDER_WS.format(symbol=self.symbol), handle)
 
-    async def depth_stream(self) -> None:
+    async def depth_stream(self, market: str = "spot") -> None:
         try:
             import websockets
         except ImportError as exc:
             raise RuntimeError("websockets is required only when the opt-in collector is launched") from exc
-        url = SPOT_DEPTH_WS.format(symbol=self.symbol)
+        is_futures = market == "futures"
+        depth = self.futures_depth if is_futures else self.depth
+        url = (FUTURES_DEPTH_WS if is_futures else SPOT_DEPTH_WS).format(symbol=self.symbol)
+        rest_url = "https://fapi.binance.com/fapi/v1/depth" if is_futures else "https://api.binance.com/api/v3/depth"
         while self.running:
             try:
                 async with websockets.connect(url, ping_interval=20, ping_timeout=60, max_queue=10000) as socket:
@@ -251,13 +282,14 @@ class BinancePublicCollector:
 
                     reader_task = asyncio.create_task(reader())
                     try:
-                        snapshot = await self._rest_json("https://api.binance.com/api/v3/depth", {"symbol": self.symbol.upper(), "limit": 1000})
-                        self.depth.seed(snapshot)
-                        self.health["depth_alive"] = True
+                        snapshot = await self._rest_json(rest_url, {"symbol": self.symbol.upper(), "limit": 1000})
+                        depth.seed(snapshot)
+                        self.health["futures_depth_alive" if is_futures else "depth_alive"] = True
                         initial_ms = int(time.time() * 1000)
-                        self.last_orderbook_persist_ms = initial_ms
+                        self.last_orderbook_persist_ms[market] = initial_ms
                         compact_snapshot = {"bids": snapshot.get("bids", [])[:100], "asks": snapshot.get("asks", [])[:100]}
-                        self.store.insert_json("orderbook_raw", compact_snapshot, initial_ms, symbol=self.symbol.upper(), last_update_id=snapshot.get("lastUpdateId"))
+                        self.store.insert_json("orderbook_raw", compact_snapshot, initial_ms, symbol=self.symbol.upper(), market=market, last_update_id=snapshot.get("lastUpdateId"))
+                        self.store.insert_orderbook_events(self.symbol.upper(), market, depth.drain_events())
                         first_live = False
                         while True:
                             payload = await queue.get()
@@ -266,17 +298,18 @@ class BinancePublicCollector:
                             if not first_live and int(payload.get("u", 0)) <= int(snapshot.get("lastUpdateId", 0)):
                                 continue
                             first_live = True
-                            if self.depth.apply(payload) and self.depth.book:
+                            if depth.apply(payload) and depth.book:
                                 now_ms = int(time.time() * 1000)
+                                self.store.insert_orderbook_events(self.symbol.upper(), market, depth.drain_events())
                                 # The executed-flow engine only needs a recent
                                 # displayed-liquidity sample. Persisting every
                                 # 100ms full-depth diff creates unbounded storage
                                 # pressure and is not needed for the API.
-                                if now_ms - self.last_orderbook_persist_ms >= 1000:
-                                    compact_book = {"bids": self.depth.book.get("bids", [])[:100], "asks": self.depth.book.get("asks", [])[:100]}
-                                    self.store.insert_json("orderbook_raw", compact_book, now_ms, symbol=self.symbol.upper(), last_update_id=self.depth.last_update_id)
-                                    self.last_orderbook_persist_ms = now_ms
-                            elif self.depth.needs_resync:
+                                if now_ms - self.last_orderbook_persist_ms[market] >= 1000:
+                                    compact_book = {"bids": depth.book.get("bids", [])[:100], "asks": depth.book.get("asks", [])[:100]}
+                                    self.store.insert_json("orderbook_raw", compact_book, now_ms, symbol=self.symbol.upper(), market=market, last_update_id=depth.last_update_id)
+                                    self.last_orderbook_persist_ms[market] = now_ms
+                            elif depth.needs_resync:
                                 raise RuntimeError("depth sequence gap; reconnecting for a fresh snapshot")
                     finally:
                         reading = False
@@ -287,7 +320,7 @@ class BinancePublicCollector:
             except Exception:
                 self.error_count += 1
                 self.reconnect_count += 1
-                self.health["depth_alive"] = False
+                self.health["futures_depth_alive" if is_futures else "depth_alive"] = False
                 await asyncio.sleep(2)
 
     async def poll_derivatives(self) -> None:
@@ -359,7 +392,7 @@ class BinancePublicCollector:
         tasks = [asyncio.create_task(fn()) for fn in (
             [self.spot_aggtrade, self.futures_aggtrade] if enable_futures else [self.spot_aggtrade]
         )]
-        tasks.extend(asyncio.create_task(fn()) for fn in (self.liquidations, self.depth_stream, self.poll_derivatives))
+        tasks.extend(asyncio.create_task(fn()) for fn in (self.liquidations, lambda: self.depth_stream("spot"), lambda: self.depth_stream("futures"), self.poll_derivatives))
         heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         stop_task = asyncio.create_task(stop_event.wait())
         try:
