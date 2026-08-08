@@ -594,7 +594,10 @@
           if (isLocal && !/^http:\/\/127\.0\.0\.1/.test(API_BASE)) {
             return Promise.resolve(buildMacroNews(tf, null)); // Use local contract if running locally but API is remote
           }
-          return apiGet('/api/v1/macro-news/overview?tf='+encodeURIComponent(tf)).then(function(b){return buildMacroNews(tf,b);}).catch(function(){return buildMacroNews(tf,null);});
+          return apiGet('/api/v1/macro-news/overview?tf='+encodeURIComponent(tf)).then(function(b){return buildMacroNews(tf,b);}).catch(function(){
+            // Static fallback: data/macro_news.json (Z-Raporu / makro-haber yayını)
+            return fetch('data/macro_news.json?ts='+Date.now()).then(function(r){ if(!r.ok) throw Error('HTTP '+r.status); return r.json(); }).then(function(b){ return buildMacroNews(tf, b); }).catch(function(e){ console.warn('macro news static fallback unavailable', e&&e.message||e); return buildMacroNews(tf,null); });
+          });
         }
 
         function hovaHistoryList(events){return (events||[]).slice(-8).reverse().map(function(e){return '<li><b>'+esc(e.source||'?')+'</b> '+esc((e.time_utc||'').slice(11,19))+' — '+esc(e.message||'')+(e.stored_memory?' <span class=\"backend-ok\">[memory]</span>':'')+'</li>';}).join('')||'<li>No archived messages yet.</li>';}
