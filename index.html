@@ -267,6 +267,70 @@
             border-radius: 4px;
         }
         label { margin-right: 5px; }
+        /* ===== Macro / News panel — NCE redesigned ===== */
+        .macro-hero { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; background: linear-gradient(135deg, #111827, #1a2332); border: 1px solid #30363d; border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
+        .macro-hero .mh-left { flex: 1 1 260px; min-width: 0; }
+        .macro-hero .mh-kicker { color: #58a6ff; font-size: .72rem; letter-spacing: .14em; font-weight: 700; text-transform: uppercase; }
+        .macro-hero h2 { margin: 4px 0 2px; color: #f0f6fc; font-size: 1.25rem; }
+        .macro-hero .mh-sub { color: #8b949e; font-size: .85rem; }
+        .macro-hero .mh-verdict { flex: 0 1 220px; text-align: center; border: 1px solid #30363d; border-radius: 8px; background: #0d1117; padding: 10px 14px; }
+        .macro-hero .mh-verdict .v-label { display: block; color: #8b949e; font-size: .68rem; letter-spacing: .12em; }
+        .macro-hero .mh-verdict .v-value { display: block; color: #f2cc60; font-size: 1.35rem; font-weight: 800; margin-top: 4px; }
+        .macro-hero .mh-verdict .v-conf { display: block; color: #8b949e; font-size: .75rem; margin-top: 3px; }
+        .hz-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 14px; margin-bottom: 16px; }
+        .hz-card { border: 1px solid #30363d; border-radius: 10px; background: #0d1117; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+        .hz-card.hz-short { border-top: 3px solid #f2cc60; }
+        .hz-card.hz-medium { border-top: 3px solid #58a6ff; }
+        .hz-card.hz-long { border-top: 3px solid #3fb950; }
+        .hz-head { font-size: .8rem; font-weight: 800; letter-spacing: .08em; color: #c9d1d9; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+        .hz-head .hz-emoji { font-size: 1.1rem; }
+        .hz-view { color: #e6edf3; font-size: .9rem; line-height: 1.5; background: #161b22; border: 1px solid #21262d; border-radius: 6px; padding: 10px 12px; }
+        .hz-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+        .hz-table th { text-align: left; color: #8b949e; font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; border-bottom: 1px solid #21262d; padding: 4px 6px; }
+        .hz-table td { padding: 5px 6px; border-bottom: 1px solid #161b22; color: #c9d1d9; vertical-align: top; }
+        .hz-table tr:last-child td { border-bottom: none; }
+        .hz-asset { font-weight: 700; color: #f0f6fc; white-space: nowrap; }
+        .hz-bull { color: #3fb950; font-weight: 700; }
+        .hz-bear { color: #f85149; font-weight: 700; }
+        .hz-neu { color: #f2cc60; font-weight: 700; }
+        .hz-drivers { background: #161b22; border: 1px solid #21262d; border-radius: 6px; padding: 8px 10px; }
+        .hz-drivers .dr-label { display: block; color: #58a6ff; font-size: .68rem; letter-spacing: .1em; font-weight: 700; margin-bottom: 5px; }
+        .hz-drivers ul { margin: 0; padding-left: 16px; color: #c9d1d9; font-size: .8rem; line-height: 1.5; }
+        .hz-drivers li { margin-bottom: 3px; }
+        .macro-top { margin-bottom: 16px; }
+        .macro-focus { border: 1px solid #30363d; border-radius: 10px; background: linear-gradient(135deg, #151b26, #0d1117); padding: 14px 16px; margin-bottom: 16px; }
+        .macro-focus .mf-head { color: #f85149; font-size: .78rem; font-weight: 800; letter-spacing: .1em; margin-bottom: 8px; }
+        .macro-focus .mf-head .mf-pulse { color: #f2cc60; }
+        .macro-focus table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+        .macro-focus th { text-align: left; color: #8b949e; font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; border-bottom: 1px solid #21262d; padding: 5px 8px; }
+        .macro-focus td { padding: 7px 8px; border-bottom: 1px solid #161b22; color: #c9d1d9; vertical-align: top; }
+        .macro-focus tr:last-child td { border-bottom: none; }
+        .macro-focus .mf-title { font-weight: 700; color: #f0f6fc; }
+        .macro-focus .mf-tag { display: inline-block; background: #f85149; color: #fff; font-size: .62rem; font-weight: 800; letter-spacing: .06em; padding: 1px 6px; border-radius: 3px; margin-left: 6px; vertical-align: middle; }
+        .macro-focus .mf-tag.mf-fed { background: #f0883e; }
+        .macro-focus .mf-tag.mf-mkt { background: #a371f7; }
+        .row-key td { background: rgba(248, 81, 73, .07); }
+        .row-key .mf-key-tag { display: inline-block; background: #f85149; color: #fff; font-size: .6rem; font-weight: 800; letter-spacing: .06em; padding: 1px 5px; border-radius: 3px; margin-left: 6px; vertical-align: middle; }
+        .dir-bull { color: #3fb950; font-weight: 700; }
+        .dir-bear { color: #f85149; font-weight: 700; }
+        .dir-neu { color: #f2cc60; }
+        .news-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+        .news-table th { text-align: left; color: #8b949e; font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; border-bottom: 1px solid #21262d; padding: 6px 8px; }
+        .news-table td { padding: 7px 8px; border-bottom: 1px solid #161b22; color: #c9d1d9; vertical-align: top; }
+        .news-table tr:last-child td { border-bottom: none; }
+        .news-table tr:hover td { background: rgba(88, 166, 255, .05); }
+        .news-table .n-title { font-weight: 600; color: #e6edf3; }
+        .news-table .n-imp { font-size: .78rem; }
+        .rel-HIGH, .rel-high { color: #f2cc60; font-weight: 700; }
+        .rel-MEDIUM, .rel-medium { color: #8b949e; }
+        .rel-LOW, .rel-low { color: #6e7681; }
+        .macro-health { margin-bottom: 16px; }
+        .macro-warn-card { border: 1px solid #f0883e; background: rgba(240, 136, 62, .06); }
+        .macro-warn-card ul { margin: 6px 0 0; padding-left: 18px; color: #c9d1d9; font-size: .85rem; line-height: 1.55; }
+        .macro-warn-card li { margin-bottom: 4px; }
+        .upcoming-list { margin: 0; padding-left: 18px; font-size: .85rem; line-height: 1.55; color: #c9d1d9; }
+        .upcoming-list b { color: #f0f6fc; }
+        @media (max-width: 700px) { .macro-hero { flex-direction: column; align-items: stretch; } .macro-hero .mh-verdict { flex: 1 1 auto; } }
     </style>
 </head>
 <body>
@@ -572,6 +636,7 @@
             j.forecast = sourcedData.forecast || {direction:'UNAVAILABLE',confidence:'LOW',relevance:'UNAVAILABLE',freshness:'UNKNOWN',decision:'WAIT',warning:'News alone is not a trade trigger.'};
             j.warnings = sourcedData.warnings || [];
             j.rules = sourcedData.rules || {};
+            j.horizon_forecast = sourcedData.horizon_forecast || {};
           }
           var archive = macroArchive();
           if (!archive.length) {
@@ -582,12 +647,29 @@
           return j;
         }
         function macroNewsView(j){
-          var f=j.forecast||{};
-          var articles=(j.articles||[]).slice(0,20).map(function(x){return '<tr><td>'+esc(x.category||'markets')+'</td><td>'+esc(x.title||'-')+'</td><td>'+esc(x.source||'-')+'</td><td>'+esc(x.published_at||'-')+'</td><td>'+esc(x.direction||'UNAVAILABLE')+'</td><td>'+esc(x.relevance||'UNAVAILABLE')+'</td><td>'+esc(x.relationship||'not_confirmed')+'</td></tr>';}).join('');
-          var health=(j.source_health||[]).map(function(x){return '<tr><td>'+esc(x.name||'-')+'</td><td>'+esc(x.status||'UNKNOWN')+'</td><td>'+esc(x.items==null?'-':x.items)+'</td><td>'+esc(x.error||'')+'</td></tr>';}).join('');
+          var f=j.forecast||{}, hf=j.horizon_forecast||{};
+          var KW=['fed','istihdam','nfp','cpi','ppi','faiz','kripto','btc','bitcoin','dominans','likidite','carry','funding','etf','stablecoin','enflasyon','tarim','tarım','issizlik','işsizlik','dxy','dolar','merkez'];
+          function low(s){return (s||'').toLowerCase();}
+          function isKey(x){var t=low(x.title)+' '+low(x.category);return KW.some(function(k){return t.indexOf(k)>=0;});}
+          function dirCls(d){d=low(d);return d==='bullish'?'dir-bull':(d==='bearish'?'dir-bear':'dir-neu');}
+          function relCls(r){r=low(r);return r==='high'?'rel-HIGH':(r==='medium'?'rel-MEDIUM':'rel-LOW');}
+          function hzCard(k,cls,emoji){var h=hf[k]||{};var rows=(h.assets||[]).map(function(a){return '<tr><td class="hz-asset">'+esc(a.asset||'')+'</td><td class="hz-'+low(a.color||'neu')+'">'+esc(a.outlook||'')+'</td><td>'+esc(a.level||'')+'</td></tr>';}).join('');var drv=(h.drivers||[]).map(function(d){return '<li>'+esc(d)+'</li>';}).join('');return '<div class="hz-card '+cls+'"><div class="hz-head"><span class="hz-emoji">'+emoji+'</span> '+esc(h.label||'')+'</div>'+(h.view?'<div class="hz-view">'+esc(h.view)+'</div>':'')+'<table class="hz-table"><tr><th>Varlık</th><th>Beklenti</th><th>Seviye</th></tr>'+rows+'</table>'+(drv?'<div class="hz-drivers"><span class="dr-label">OLAY ZİNCİRİ · NEDEN</span><ul>'+drv+'</ul></div>':'')+'</div>';}
+          var articles=(j.articles||[]).slice(0,20);
+          var keyArticles=articles.filter(isKey);
+          var focusRows=keyArticles.slice(0,6).map(function(x){
+            var fed=low(x.title).indexOf('fed')>=0||low(x.title).indexOf('istihdam')>=0||low(x.title).indexOf('nfp')>=0||low(x.title).indexOf('cpi')>=0||low(x.title).indexOf('ppi')>=0||low(x.title).indexOf('tarim')>=0||low(x.title).indexOf('tarım')>=0||low(x.title).indexOf('issizlik')>=0||low(x.title).indexOf('işsizlik')>=0;
+            var tag='<span class="mf-tag '+(fed?'mf-fed':'mf-mkt')+'">'+(fed?'FED/İSTİHDAM':'KRİPTO')+'</span>';
+            return '<tr><td>'+esc(x.category||'markets')+'</td><td class="mf-title">'+esc(x.title||'-')+tag+'</td><td>'+esc(x.source||'-')+'</td><td>'+esc(x.published_at||'-')+'</td><td class="'+dirCls(x.direction)+'">'+esc(x.direction||'UNAVAILABLE')+'</td><td class="'+relCls(x.relevance)+'">'+esc(x.relevance||'UNAVAILABLE')+'</td></tr>';
+          }).join('');
+          var allRows=articles.map(function(x){
+            var key=isKey(x);
+            return '<tr class="'+(key?'row-key':'')+'"><td>'+esc(x.category||'markets')+'</td><td class="n-title">'+esc(x.title||'-')+(key?'<span class="mf-key-tag">⚡ KRİPTO-İLGİLİ</span>':'')+'</td><td>'+esc(x.source||'-')+'</td><td>'+esc(x.published_at||'-')+'</td><td class="'+dirCls(x.direction)+'">'+esc(x.direction||'UNAVAILABLE')+'</td><td class="'+relCls(x.relevance)+'">'+esc(x.relevance||'UNAVAILABLE')+'</td><td>'+esc(x.relationship||'not_confirmed')+'</td></tr>';
+          }).join('');
+          var health=(j.source_health||[]).map(function(x){return '<tr><td>'+esc(x.name||'-')+'</td><td class="'+((x.status||'')==='OK'?'dir-bull':(x.status==='UNAVAILABLE'?'dir-neu':'dir-bear'))+'">'+esc(x.status||'UNKNOWN')+'</td><td>'+esc(x.items==null?'-':x.items)+'</td><td>'+esc(x.error||'')+'</td></tr>';}).join('');
           var warning=(j.warnings||[]).concat([f.warning||'News alone is not a trade trigger.']).map(function(x){return '<li>'+esc(x)+'</li>';}).join('');
-          var forecast='<div class="term-grid">'+pill('News direction',f.direction==='BULLISH',f.direction||'UNAVAILABLE')+pill('Confidence',false,f.confidence||'LOW')+pill('Relevance',f.relevance==='HIGH',f.relevance||'UNAVAILABLE')+pill('Freshness',f.freshness==='RECENT',f.freshness||'UNKNOWN')+pill('Decision',false,f.decision||'WAIT')+'</div>';
-          return '<div class="term-grid">'+pill('Status',j.status==='PASS',j.status||'SOURCE_MISSING')+pill('Rule',false,'SUPPORTING EVIDENCE ONLY')+'</div>'+card('Macro/news forecast for '+esc(j.timeframe||curTF),forecast+'<div style="margin-top:10px;color:#f2cc60">Conditional headline context; confirm with structure, liquidity, order flow, trend and risk before any decision.</div>')+card('Investing.com + official sources', '<table class="term-table"><tr><th>Category</th><th>Headline</th><th>Source</th><th>UTC</th><th>Direction</th><th>Relevance</th><th>Relation</th></tr>'+articles+'</table>')+card('Source health','<table class="term-table"><tr><th>Source</th><th>Status</th><th>Items</th><th>Error</th></tr>'+health+'</table>')+card('Warnings', '<ul>'+warning+'</ul>','backend-warn');
+          var hero='<div class="macro-hero"><div class="mh-left"><div class="mh-kicker">NCE MAKRO TAHMİN · '+esc(j.time_utc||'')+' UTC</div><h2>Makro / Haber Paneli — '+esc(j.timeframe||curTF)+'</h2><div class="mh-sub">'+esc(j.source||'')+' · '+esc(j.status||'SOURCE_MISSING')+'</div></div><div class="mh-verdict"><span class="v-label">GENEL TAHMİN</span><span class="v-value">'+esc(f.direction||'UNAVAILABLE')+'</span><span class="v-conf">Güven: '+esc(f.confidence||'LOW')+' · Önem: '+esc(f.relevance||'UNAVAILABLE')+' · Karar: '+esc(f.decision||'WAIT')+'</span></div></div>';
+          var hz='<div class="hz-grid">'+hzCard('short','hz-short','🕐')+hzCard('medium','hz-medium','📅')+hzCard('long','hz-long','🔭')+'</div>';
+          return hero+hz+(focusRows?'<div class="macro-focus"><div class="mf-head">⚡ <span class="mf-pulse">KRİPTO-ODAKLI HABERLER</span> — FED · istihdam · NFP/CPI/PPI · likidite</div><table><tr><th>Kategori</th><th>Başlık</th><th>Kaynak</th><th>UTC</th><th>Yön</th><th>Önem</th></tr>'+focusRows+'</table></div>':'')+card('📰 Tüm haberler — Investing.com + resmî kaynaklar', '<table class="news-table"><tr><th>Kategori</th><th>Başlık</th><th>Kaynak</th><th>UTC</th><th>Yön</th><th>Önem</th><th>İlişki</th></tr>'+allRows+'</table>')+card('🩺 Kaynak sağlığı','<table class="news-table"><tr><th>Kaynak</th><th>Durum</th><th>Adet</th><th>Hata</th></tr>'+health+'</table>')+card('⚠️ Uyarılar', '<ul>'+warning+'</ul>','macro-warn-card');
         }
         function renderMacroNewsTab(j){window.__nceMacroNews=j;var term=document.getElementById('terminal');if(term)term.innerHTML=macroNewsView(j);return j;}
         function loadMacroNewsLocal(tf){
