@@ -594,9 +594,11 @@
           if (isLocal && !/^http:\/\/127\.0\.0\.1/.test(API_BASE)) {
             return Promise.resolve(buildMacroNews(tf, null)); // Use local contract if running locally but API is remote
           }
-          return apiGet('/api/v1/macro-news/overview?tf='+encodeURIComponent(tf)).then(function(b){return buildMacroNews(tf,b);}).catch(function(){
-            // Static fallback: data/macro_news.json (Z-Raporu / makro-haber yayını)
-            return fetch('data/macro_news.json?ts='+Date.now()).then(function(r){ if(!r.ok) throw Error('HTTP '+r.status); return r.json(); }).then(function(b){ return buildMacroNews(tf, b); }).catch(function(e){ console.warn('macro news static fallback unavailable', e&&e.message||e); return buildMacroNews(tf,null); });
+          // Priority 1: static Z-Raporu data/macro_news.json (Nur'un yayınladığı içerik)
+          return fetch('data/macro_news.json?ts='+Date.now()).then(function(r){ if(!r.ok) throw Error('HTTP '+r.status); return r.json(); }).then(function(b){ return buildMacroNews(tf, b); }).catch(function(e){
+            console.warn('macro news static missing, falling back to API', e&&e.message||e);
+            // Priority 2: live backend API
+            return apiGet('/api/v1/macro-news/overview?tf='+encodeURIComponent(tf)).then(function(b){return buildMacroNews(tf,b);}).catch(function(){return buildMacroNews(tf,null);});
           });
         }
 
