@@ -13,35 +13,194 @@
     "warning": "Haber tek başına trade tetikleyicisi değildir. Piyasa yapısı, likidite, order flow ve rejim teyidiyle birlikte değerlendirilir."
   },
   "upcoming_events": [
-    {"title": "ABD TÜFE (CPI) — Ağustos 12, Çarşamba", "event": "CPI", "btc_impact": "high", "status": "upcoming", "source": "Kiplinger / BLS takvimi", "reason": "Haftanın olayı. Güçlü CPI = 'FED geride mi kaldı' tartışması geri döner → altın/BTC baskı. Zayıf CPI = risk-on, altın ve BTC destek."},
-    {"title": "ABD ÜFE (PPI) — Ağustos 13, Perşembe", "event": "PPI", "btc_impact": "medium", "status": "upcoming", "source": "Kiplinger / BLS takvimi", "reason": "CPI sonrası ikinci enflasyon verisi; FED sıkılaşma beklentisini teyit/iptal eder."},
-    {"title": "Hürmüz Boğazı gerginliği — BAE/ADNOC tanker saldırısı", "event": "Hormuz risk premium", "btc_impact": "medium-high", "status": "live", "source": "Reuters / CNBC", "reason": "Cuma kapanışı SONRASI geldi → Pazartesi fiyatlanacak. Petrol + güvenli liman (altın) primi; risk-off senaryosunda BTC 63K testi canlı."},
-    {"title": "Yen carry trade çözülme riski", "event": "Yen carry unwind", "btc_impact": "high", "status": "watch", "source": "Reuters / Investing.com", "reason": "USDJPY ~158, rekor kısa. USDJPY 160 = küresel risk-off alarmı. Çözülürse tüm risk varlıkları (BTC dahil) baskılanır."}
+    {
+      "title": "ABD TÜFE (CPI) — Ağustos 12, Çarşamba",
+      "event": "CPI",
+      "btc_impact": "high",
+      "status": "upcoming",
+      "source": "Kiplinger / BLS takvimi",
+      "reason": "Haftanın olayı. Güçlü CPI = 'FED geride mi kaldı' tartışması geri döner → altın/BTC baskı. Zayıf CPI = risk-on, altın ve BTC destek."
+    },
+    {
+      "title": "ABD ÜFE (PPI) — Ağustos 13, Perşembe",
+      "event": "PPI",
+      "btc_impact": "medium",
+      "status": "upcoming",
+      "source": "Kiplinger / BLS takvimi",
+      "reason": "CPI sonrası ikinci enflasyon verisi; FED sıkılaşma beklentisini teyit/iptal eder."
+    },
+    {
+      "title": "Hürmüz Boğazı gerginliği — BAE/ADNOC tanker saldırısı",
+      "event": "Hormuz risk premium",
+      "btc_impact": "medium-high",
+      "status": "live",
+      "source": "Reuters / CNBC",
+      "reason": "Cuma kapanışı SONRASI geldi → Pazartesi fiyatlanacak. Petrol + güvenli liman (altın) primi; risk-off senaryosunda BTC 63K testi canlı."
+    },
+    {
+      "title": "Yen carry trade çözülme riski",
+      "event": "Yen carry unwind",
+      "btc_impact": "high",
+      "status": "watch",
+      "source": "Reuters / Investing.com",
+      "reason": "USDJPY ~158, rekor kısa. USDJPY 160 = küresel risk-off alarmı. Çözülürse tüm risk varlıkları (BTC dahil) baskılanır."
+    }
   ],
   "released_events": [
-    {"title": "ABD NFP — Temmuz -23K (beklenenden zayıf)", "event": "NFP", "btc_impact": "mixed", "status": "released", "source": "Investing.com", "reason": "Dolar zayıflattı (DXY 99.48), altına destek; ancak istihdam zayıflığı FED'in sıkışık olduğu bir resimde resesyon endişesi de yaratır."},
-    {"title": "Trade Desk (TTD) -21.9% — işlem sonrası", "event": "TTD earnings", "btc_impact": "low", "status": "released", "source": "CNBC / işlem sonrası", "reason": "AI yazılım/reklam harcaması zayıflıyor ⚠️. AI yazılım hisseleri için olumsuz sinyal; kriptoya doğrudan etkisi düşük ama risk iştahını zedeler."},
-    {"title": "Goldman AI rotasyonu: Infra 148 / At Risk 91 / S&P 109", "event": "Goldman AI basket", "btc_impact": "low", "status": "released", "source": "Goldman Market Pulse", "reason": "Para AI altyapıya akıyor (NVDA +2.27%), 'riskli' AI hisselerinden çıkıyor. AI içi rotasyon, genel risk iştahını destekler ama sektör içi ayrışma yaratır."}
+    {
+      "title": "ABD NFP — Temmuz -23K (beklenenden zayıf)",
+      "event": "NFP",
+      "btc_impact": "mixed",
+      "status": "released",
+      "source": "Investing.com",
+      "reason": "Dolar zayıflattı (DXY 99.48), altına destek; ancak istihdam zayıflığı FED'in sıkışık olduğu bir resimde resesyon endişesi de yaratır."
+    },
+    {
+      "title": "Trade Desk (TTD) -21.9% — işlem sonrası",
+      "event": "TTD earnings",
+      "btc_impact": "low",
+      "status": "released",
+      "source": "CNBC / işlem sonrası",
+      "reason": "AI yazılım/reklam harcaması zayıflıyor ⚠️. AI yazılım hisseleri için olumsuz sinyal; kriptoya doğrudan etkisi düşük ama risk iştahını zedeler."
+    },
+    {
+      "title": "Goldman AI rotasyonu: Infra 148 / At Risk 91 / S&P 109",
+      "event": "Goldman AI basket",
+      "btc_impact": "low",
+      "status": "released",
+      "source": "Goldman Market Pulse",
+      "reason": "Para AI altyapıya akıyor (NVDA +2.27%), 'riskli' AI hisselerinden çıkıyor. AI içi rotasyon, genel risk iştahını destekler ama sektör içi ayrışma yaratır."
+    }
   ],
   "articles": [
-    {"category": "macro", "title": "DOLAR ZAYIF: DXY 99.48 — para dolardan çıkıyor", "source": "Investing.com", "published_at": "2026-08-08", "direction": "BEARISH", "relevance": "HIGH", "relationship": "altin_btc_destek"},
-    {"category": "gold", "title": "ALTIN 4,401 (+2.37%) — dolar zayıflığı + Hürmüz risk primi + UBS 5K anchoring; 4,300 teyit, 4,800 yolunda", "source": "Investing.com / Reuters", "published_at": "2026-08-08", "direction": "BULLISH", "relevance": "HIGH", "relationship": "en_guclu_akis"},
-    {"category": "silver", "title": "GÜMÜŞ 63.80 (+3.56%) — endüstriyel talep + altın korelasyonu; en volatil varlık (kırmızı günde çok düşer, yeşil günde çok çıkar)", "source": "Investing.com", "published_at": "2026-08-08", "direction": "BULLISH", "relevance": "HIGH", "relationship": "altin_momentum_destek"},
-    {"category": "crypto", "title": "BTC 65,079 (+0.42%) — zayıf tutunma ~79$ marjinal; 65K üstü kapanış = yeşil, 63K altı = stablecoin dönüşü", "source": "Investing.com / Binance", "published_at": "2026-08-08", "direction": "NEUTRAL", "relevance": "HIGH", "relationship": "kosullu"},
-    {"category": "crypto", "title": "ETH 1,923 — zayıf; altcoinler BTC'ye bağlı (65K üstü = rahatlama, 63K altı = stablecoin)", "source": "Investing.com", "published_at": "2026-08-08", "direction": "NEUTRAL", "relevance": "MEDIUM", "relationship": "btc_bagimli"},
-    {"category": "equities", "title": "S&P REKOR kapadı; ama AI içi rotasyon: altyapı (NVDA +2.27%, AI Infra 148) ↔ yazılım (TTD -22%, AI At Risk 91)", "source": "CNBC / Goldman Market Pulse", "published_at": "2026-08-08", "direction": "MIXED", "relevance": "MEDIUM", "relationship": "sektor_ici_ayrisiyor"},
-    {"category": "oil", "title": "HÜRMÜZ: BAE/ADNOC tankeri füze vuruldu — kapanış SONRASI haber; Temmuz sonu $100 üstü petrol; Pazartesi primi fiyatlanacak", "source": "Reuters / CNBC", "published_at": "2026-08-08", "direction": "BULLISH", "relevance": "HIGH", "relationship": "pazartesi_prim"},
-    {"category": "fx", "title": "USDJPY ~158 — rekor kısa; 160 = küresel risk-off alarmı (en büyük likidite riski)", "source": "Investing.com / Reuters", "published_at": "2026-08-08", "direction": "BEARISH", "relevance": "HIGH", "relationship": "carry_unwind_riski"},
-    {"category": "geopolitics", "title": "İran-ABD çatışması canlı; İran ihtimal fiyatlaması (anlaşma değil) — petrol ve altın primli", "source": "Reuters", "published_at": "2026-08-08", "direction": "BULLISH", "relevance": "MEDIUM", "relationship": "guvenli_liman"},
-    {"category": "fed", "title": "FED SIKIŞIK: istihdam zayıf (NFP -23K) ama ISM fiyat 70.3; artırım ihtimali %50-55; 10Y 4.615", "source": "Investing.com / Kiplinger", "published_at": "2026-08-08", "direction": "MIXED", "relevance": "HIGH", "relationship": "enflasyon_haftasi"}
+    {
+      "category": "macro",
+      "title": "DOLAR ZAYIF: DXY 99.48 — para dolardan çıkıyor",
+      "source": "Investing.com",
+      "published_at": "2026-08-08",
+      "direction": "BEARISH",
+      "relevance": "HIGH",
+      "relationship": "altin_btc_destek"
+    },
+    {
+      "category": "gold",
+      "title": "ALTIN 4,401 (+2.37%) — dolar zayıflığı + Hürmüz risk primi + UBS 5K anchoring; 4,300 teyit, 4,800 yolunda",
+      "source": "Investing.com / Reuters",
+      "published_at": "2026-08-08",
+      "direction": "BULLISH",
+      "relevance": "HIGH",
+      "relationship": "en_guclu_akis"
+    },
+    {
+      "category": "silver",
+      "title": "GÜMÜŞ 63.80 (+3.56%) — endüstriyel talep + altın korelasyonu; en volatil varlık (kırmızı günde çok düşer, yeşil günde çok çıkar)",
+      "source": "Investing.com",
+      "published_at": "2026-08-08",
+      "direction": "BULLISH",
+      "relevance": "HIGH",
+      "relationship": "altin_momentum_destek"
+    },
+    {
+      "category": "crypto",
+      "title": "BTC 65,079 (+0.42%) — zayıf tutunma ~79$ marjinal; 65K üstü kapanış = yeşil, 63K altı = stablecoin dönüşü",
+      "source": "Investing.com / Binance",
+      "published_at": "2026-08-08",
+      "direction": "NEUTRAL",
+      "relevance": "HIGH",
+      "relationship": "kosullu"
+    },
+    {
+      "category": "crypto",
+      "title": "ETH 1,923 — zayıf; altcoinler BTC'ye bağlı (65K üstü = rahatlama, 63K altı = stablecoin)",
+      "source": "Investing.com",
+      "published_at": "2026-08-08",
+      "direction": "NEUTRAL",
+      "relevance": "MEDIUM",
+      "relationship": "btc_bagimli"
+    },
+    {
+      "category": "equities",
+      "title": "S&P REKOR kapadı; ama AI içi rotasyon: altyapı (NVDA +2.27%, AI Infra 148) ↔ yazılım (TTD -22%, AI At Risk 91)",
+      "source": "CNBC / Goldman Market Pulse",
+      "published_at": "2026-08-08",
+      "direction": "MIXED",
+      "relevance": "MEDIUM",
+      "relationship": "sektor_ici_ayrisiyor"
+    },
+    {
+      "category": "oil",
+      "title": "HÜRMÜZ: BAE/ADNOC tankeri füze vuruldu — kapanış SONRASI haber; Temmuz sonu $100 üstü petrol; Pazartesi primi fiyatlanacak",
+      "source": "Reuters / CNBC",
+      "published_at": "2026-08-08",
+      "direction": "BULLISH",
+      "relevance": "HIGH",
+      "relationship": "pazartesi_prim"
+    },
+    {
+      "category": "fx",
+      "title": "USDJPY ~158 — rekor kısa; 160 = küresel risk-off alarmı (en büyük likidite riski)",
+      "source": "Investing.com / Reuters",
+      "published_at": "2026-08-08",
+      "direction": "BEARISH",
+      "relevance": "HIGH",
+      "relationship": "carry_unwind_riski"
+    },
+    {
+      "category": "geopolitics",
+      "title": "İran-ABD çatışması canlı; İran ihtimal fiyatlaması (anlaşma değil) — petrol ve altın primli",
+      "source": "Reuters",
+      "published_at": "2026-08-08",
+      "direction": "BULLISH",
+      "relevance": "MEDIUM",
+      "relationship": "guvenli_liman"
+    },
+    {
+      "category": "fed",
+      "title": "FED SIKIŞIK: istihdam zayıf (NFP -23K) ama ISM fiyat 70.3; artırım ihtimali %50-55; 10Y 4.615",
+      "source": "Investing.com / Kiplinger",
+      "published_at": "2026-08-08",
+      "direction": "MIXED",
+      "relevance": "HIGH",
+      "relationship": "enflasyon_haftasi"
+    }
   ],
   "source_health": [
-    {"name": "Investing.com", "status": "OK", "items": 10, "error": ""},
-    {"name": "Kiplinger (takvim)", "status": "OK", "items": 2, "error": "CPI 12 Ağu / PPI 13 Ağu tam doğrulandı"},
-    {"name": "Reuters", "status": "OK", "items": 3, "error": ""},
-    {"name": "CNBC", "status": "OK", "items": 2, "error": ""},
-    {"name": "Goldman Market Pulse", "status": "OK", "items": 1, "error": ""},
-    {"name": "Türkiye (BIST/USDTRY)", "status": "UNAVAILABLE", "items": 0, "error": "Hafta sonu — veri çekilmedi (BILMIYORUM)"}
+    {
+      "name": "Investing.com",
+      "status": "OK",
+      "items": 10,
+      "error": ""
+    },
+    {
+      "name": "Kiplinger (takvim)",
+      "status": "OK",
+      "items": 2,
+      "error": "CPI 12 Ağu / PPI 13 Ağu tam doğrulandı"
+    },
+    {
+      "name": "Reuters",
+      "status": "OK",
+      "items": 3,
+      "error": ""
+    },
+    {
+      "name": "CNBC",
+      "status": "OK",
+      "items": 2,
+      "error": ""
+    },
+    {
+      "name": "Goldman Market Pulse",
+      "status": "OK",
+      "items": 1,
+      "error": ""
+    },
+    {
+      "name": "Türkiye (BIST/USDTRY)",
+      "status": "UNAVAILABLE",
+      "items": 0,
+      "error": "Hafta sonu — veri çekilmedi (BILMIYORUM)"
+    }
   ],
   "warnings": [
     "NET TAHMİN — Pazartesi açılışı: KIRMIZIYA MEYİLLİ, bölünmüş gün. 🔴 Petrol + AI yazılım hisseleri (Hürmüz primi fiyatlanmamış + TTD düşüşü); 🔵 Altın + gümüş (güvenli liman akışı); 🟡 BTC 64.5-65K bandı (risk-off baskısı; 65K üstü kapanırsa yeşile döner).",
@@ -56,5 +215,130 @@
     "btc": "65K üstü günlük kapanış = yükseliş teyidi; 63K altı = stablecoin dönüşü; dominans 56.8",
     "entry": "Rejim teyidi (bearish/bullish/unclear) olmadan direction entry YOK; unclear/karşı → flat",
     "risk": "Haber rejiminde pozisyon boyutu azalt; SL/TP immutable; BTC yalnız paper trade"
+  },
+  "horizon_forecast": {
+    "short": {
+      "label": "YAKIN VADE (1-5 GÜN)",
+      "view": "Pazartesi kırmızıya meyilli bölünmüş açılış: Hürmüz risk primi fiyatlanmamış + AI yazılım düşüşü baskı; altın/gümüş güvenli liman akışı.",
+      "assets": [
+        {
+          "asset": "BTC",
+          "outlook": "Dalgalı — 64.5-65K bandı",
+          "level": "65K üstü kapanış = yeşil; 63K altı = stablecoin",
+          "color": "neu"
+        },
+        {
+          "asset": "Kripto (altcoin)",
+          "outlook": "ETH zayıf (1,923); BTC'ye bağlı",
+          "level": "65K üstü rahatlama; 63K altı stablecoin dönüşü",
+          "color": "neu"
+        },
+        {
+          "asset": "Altın",
+          "outlook": "Güçlü — güvenli liman",
+          "level": "4,300 teyit → 4,800 yolunda",
+          "color": "bull"
+        },
+        {
+          "asset": "Gümüş",
+          "outlook": "En volatil; yeşilde en çok çıkar",
+          "level": "63.80 üstü momentum",
+          "color": "bull"
+        },
+        {
+          "asset": "Petrol / Emtia",
+          "outlook": "Hürmüz primi Pazartesi fiyatlanacak",
+          "level": "$100 üstü testi",
+          "color": "bull"
+        }
+      ],
+      "drivers": [
+        "Hürmüz: BAE/ADNOC tankeri füze vuruldu — Cuma kapanışı SONRASI haber, primi Pazartesi fiyatlanır",
+        "CPI Çar 12 Ağu + PPI Per 13 Ağu — enflasyon haftası başlıyor",
+        "İran-ABD çatışması canlı; İran ihtimal fiyatlaması (anlaşma değil)"
+      ]
+    },
+    "medium": {
+      "label": "ORTA VADE (2-6 HAFTA)",
+      "view": "FED yönü belirleyici: istihdam zayıf ama ISM fiyat 70.3 — artırım ihtimali %50-55. Güçlü CPI = sıkılaşma testi → altın/BTC baskı.",
+      "assets": [
+        {
+          "asset": "BTC",
+          "outlook": "65K üstü kalıcılık = trend dönüşü",
+          "level": "Yoksa 60-63K bandı; dominans 56.8",
+          "color": "neu"
+        },
+        {
+          "asset": "Kripto (altcoin)",
+          "outlook": "Altcoin mevsimi ancak dominans düşerse",
+          "level": "Dominans yükseliyor = altcoinler zayıf",
+          "color": "bear"
+        },
+        {
+          "asset": "Altın",
+          "outlook": "4,300 üstü teyit → 4,800 hedef",
+          "level": "CPI güçlü gelirse geçici düzeltme",
+          "color": "bull"
+        },
+        {
+          "asset": "Gümüş",
+          "outlook": "Endüstriyel talep + altın korelasyonu",
+          "level": "63.80 üstü momentum",
+          "color": "bull"
+        },
+        {
+          "asset": "Petrol / Emtia",
+          "outlook": "Jeopolitik prim kalıcı olabilir",
+          "level": "İran anlaşma ihtimal fiyatlaması (anlaşma değil)",
+          "color": "bull"
+        }
+      ],
+      "drivers": [
+        "FOMC Eylül — enflasyon haftası (12-13 Ağu) sonrası FED yönü netleşir",
+        "Yen carry: USDJPY ~158 rekor kısa; 160 = küresel risk-off alarmı — en büyük likidite riski",
+        "DXY 99.48 — para dolardan çıkıyor; altın/gümüş ana destinasyon"
+      ]
+    },
+    "long": {
+      "label": "UZUN VADE (3-6 AY)",
+      "view": "Para akışı: DOLAR (zayıf) → ALTIN + GÜMÜŞ (en güçlü) → BTC (kuyrukta) → HİSSE (AI içi rotasyon). BTC için 65K aylık kapanış kritik.",
+      "assets": [
+        {
+          "asset": "BTC",
+          "outlook": "65K üstü aylık kapanış = yeni ATH yolunda",
+          "level": "63K altı kalıcı = 50K'lara düzeltme riski",
+          "color": "neu"
+        },
+        {
+          "asset": "Kripto",
+          "outlook": "Regülasyon + ETF akışı belirleyici",
+          "level": "Kurumsal giriş devam ederse boğa yapısı",
+          "color": "neu"
+        },
+        {
+          "asset": "Altın",
+          "outlook": "UBS 5K anchoring; para dolardan çıkıyor",
+          "level": "4,800 → 5,000 hedefleri",
+          "color": "bull"
+        },
+        {
+          "asset": "Gümüş",
+          "outlook": "Enflasyon yeniden ısınırsa emtia kompleksi",
+          "level": "Altın korelasyonuyla 70+ testi",
+          "color": "bull"
+        },
+        {
+          "asset": "Petrol / Emtia",
+          "outlook": "Yapısal arz riski (Hürmüz) + jeopolitik",
+          "level": "Fiyatlama ihtimal bazlı, anlaşma değil",
+          "color": "bull"
+        }
+      ],
+      "drivers": [
+        "FED faiz yolu: artırım ihtimali %50-55 — sıkılaşma = BTC baskı, altın desteği değil",
+        "Yen carry unwind (USDJPY 160) = küresel likidite krizi tetikleyicisi — 1.14T$ Japonya UST pozisyonu",
+        "Dominans 56.8 — BTC'nin kripto pazarındaki hakimiyeti altcoin sezonunu erteliyor"
+      ]
+    }
   }
 }
