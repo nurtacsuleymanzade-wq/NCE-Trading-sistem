@@ -564,6 +564,7 @@
           };
           if (sourcedData && (sourcedData.upcoming_events || sourcedData.released_events || sourcedData.articles)) {
             j.status = sourcedData.status || 'PARTIAL PASS';
+            j.time_utc = sourcedData.time_utc || j.time_utc;
             j.upcoming_events = (sourcedData.upcoming_events || sourcedData.released_events || []).map(function(x){return {type:x.title||x.event||'Official release',impact:x.btc_impact||'uncertain',status:x.status||'released',source:x.source||'',watch:x.reason||''};});
             j.source = 'backend_macro_news';
             j.articles = sourcedData.articles || [];
@@ -1134,10 +1135,7 @@
             html += card('Available derivatives context', listObj(j.context||{}));
             html += card('Missing true options feed', esc((j.missing_external_data||[]).join(', ')||'No missing fields reported'), 'backend-warn');
           } else if (name === 'Makro ve Haber') {
-            var mods = j.modules||{};
-            html += card('Market synthesis', listObj(j.executive_summary||{}));
-            html += card('Decision mode', esc((j.decision||'WAIT')+' / '+(j.mode||'research_only')));
-            html += card('Real sources present', esc(Object.keys(mods).filter(function(k){ return mods[k]&&mods[k].status; }).join(', ') || 'None'));
+            html += macroNewsView(j);
           } else if (name === 'Simülasyon') {
             html += card('Current price', '$'+fmtNum(j.current_price,2));
             html += card('Scenarios', Object.keys(j.scenarios||{}).map(function(k){ var x=j.scenarios[k]; return '<b>'+esc(k)+':</b> '+fmtNum(x.net_return_pct,6)+'% net → $'+fmtNum(x.projected_price,2); }).join('<br>')||'No scenario');
