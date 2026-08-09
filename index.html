@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="az">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NCE Trading System</title>
+    <title>NCE Trading System · Likvidasiya Xəritəsi</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0d1117; color: #c9d1d9; margin: 0; padding: 0; }
         #container { display: flex; flex-direction: column; height: 100vh; }
@@ -331,6 +331,112 @@
         .upcoming-list { margin: 0; padding-left: 18px; font-size: .85rem; line-height: 1.55; color: #c9d1d9; }
         .upcoming-list b { color: #f0f6fc; }
         @media (max-width: 700px) { .macro-hero { flex-direction: column; align-items: stretch; } .macro-hero .mh-verdict { flex: 1 1 auto; } }
+
+        /* Decision-first liquidation map refresh */
+        #header { gap: 10px; }
+        #header a { white-space: nowrap; }
+        #header #liveBtn { position:static; opacity:1; flex:0 0 auto; }
+        #header #liveBtn.on { opacity:1; }
+        #price-info { gap: 7px; min-width: 0; }
+        #price-info span { margin-left: 0; white-space: nowrap; }
+        #tabs { gap: 10px; align-items: stretch; }
+        .tab-group { display:flex; align-items:stretch; gap:2px; padding-right:10px; border-right:1px solid #30363d; }
+        .tab-group:last-child { border-right:0; padding-right:0; }
+        .tab-group-label { align-self:center; color:#6e7681; font-size:.62rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; padding:0 4px 0 2px; white-space:nowrap; }
+        #tabs button { min-height:34px; border-radius:5px 5px 0 0; }
+        #tabs button:focus-visible, #tf button:focus-visible, #liveBtn:focus-visible, button:focus-visible, summary:focus-visible { outline:2px solid #79c0ff; outline-offset:2px; }
+        .panel-page-head { position:sticky; top:0; z-index:30; padding:8px 0 12px; background:linear-gradient(#0d1117 82%,rgba(13,17,23,0)); }
+        .panel-page-head h2 { font-size:clamp(1.1rem,2vw,1.55rem); }
+
+        .liq-dashboard { max-width:1400px; margin:0 auto; display:flex; flex-direction:column; gap:14px; color:#c9d1d9; }
+        .liq-hero { display:flex; justify-content:space-between; gap:18px; align-items:flex-start; padding:20px; border:1px solid #388bfd66; border-radius:12px; background:radial-gradient(circle at 90% 0%,#1f6feb26,transparent 38%),linear-gradient(135deg,#111827,#161b22); }
+        .liq-kicker { color:#79c0ff; font-size:.7rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
+        .liq-hero h3 { margin:7px 0 6px; color:#f0f6fc; font-size:clamp(1.3rem,2.6vw,2rem); }
+        .liq-hero p { max-width:800px; margin:0; line-height:1.55; color:#c9d1d9; }
+        .liq-purpose { margin-top:12px; padding:10px 12px; border-left:3px solid #58a6ff; border-radius:5px; background:#0d111799; color:#e6edf3; font-size:.88rem; }
+        .liq-live-box { min-width:220px; padding:14px; border:1px solid #30363d; border-radius:8px; background:#0d1117; }
+        .liq-live-box .label { display:block; color:#8b949e; font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; }
+        .liq-live-box strong { display:block; margin-top:5px; color:#3fb950; font-size:1.1rem; }
+        .liq-live-box small { display:block; margin-top:8px; color:#8b949e; line-height:1.45; }
+        .liq-summary-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; }
+        .liq-kpi { min-width:0; padding:14px; border:1px solid #30363d; border-radius:9px; background:#161b22; }
+        .liq-kpi .label { color:#8b949e; font-size:.69rem; font-weight:800; letter-spacing:.05em; text-transform:uppercase; }
+        .liq-kpi .value { display:block; margin-top:6px; color:#f0f6fc; font-size:1.25rem; font-weight:800; overflow-wrap:anywhere; }
+        .liq-kpi .detail { display:block; margin-top:5px; color:#8b949e; font-size:.75rem; line-height:1.4; }
+        .liq-kpi.near { border-color:#f2cc6066; }
+        .liq-kpi.largest { border-color:#f8514966; }
+        .liq-kpi.bias { border-color:#58a6ff66; }
+        .liq-kpi.confidence { border-color:#d2992266; }
+        .liq-status { display:inline-flex; align-items:center; gap:5px; width:max-content; padding:3px 7px; border-radius:999px; font-size:.68rem; font-weight:800; letter-spacing:.04em; }
+        .liq-status.real { color:#b6f2c0; background:#23863655; border:1px solid #3fb95066; }
+        .liq-status.estimated { color:#ffe6a3; background:#9e6a0333; border:1px solid #d2992266; }
+        .liq-status.unconfirmed { color:#ffd7d3; background:#f8514922; border:1px solid #f8514966; }
+        .liq-status.stale { color:#ffd7d3; background:#f8514922; border:1px solid #f8514966; }
+        .liq-status.fresh { color:#b6f2c0; background:#23863655; border:1px solid #3fb95066; }
+        .liq-alert { padding:11px 13px; border:1px solid #d2992266; border-left:4px solid #d29922; border-radius:7px; background:#9e6a0314; line-height:1.45; }
+        .liq-alert strong { color:#f2cc60; }
+        .liq-section { padding:16px; border:1px solid #30363d; border-radius:10px; background:#161b22; }
+        .liq-section-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:12px; }
+        .liq-section h4 { margin:0; color:#f0f6fc; font-size:1.05rem; }
+        .liq-section-head p { margin:4px 0 0; color:#8b949e; font-size:.8rem; line-height:1.4; }
+        .liq-controls { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+        .liq-controls button, .liq-controls select { min-height:32px; padding:6px 9px; border:1px solid #484f58; border-radius:6px; background:#0d1117; color:#c9d1d9; cursor:pointer; }
+        .liq-controls button:hover, .liq-controls select:hover { border-color:#58a6ff; color:#fff; }
+        .liq-chart-shell { overflow:auto; border:1px solid #21262d; border-radius:8px; background:#0d1117; }
+        .liq-chart-shell svg { display:block; width:100%; min-width:760px; height:auto; }
+        .liq-chart-legend { display:flex; flex-wrap:wrap; gap:8px; margin-top:9px; color:#8b949e; font-size:.75rem; }
+        .liq-chart-legend span { padding:4px 8px; border:1px solid #30363d; border-radius:999px; }
+        .liq-chart-legend .long { color:#ffaaa4; border-color:#f8514966; }
+        .liq-chart-legend .short { color:#b6f2c0; border-color:#3fb95066; }
+        .liq-two-col { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(300px,.75fr); gap:14px; }
+        .liq-target-list { display:flex; flex-direction:column; gap:8px; }
+        .liq-target-row { display:grid; grid-template-columns:32px 1fr auto auto; gap:10px; align-items:center; padding:10px; border:1px solid #30363d; border-radius:7px; background:#0d1117; }
+        .liq-target-row.nearest { border-color:#d29922aa; background:#9e6a0310; }
+        .liq-rank { display:grid; place-items:center; width:26px; height:26px; border-radius:50%; background:#30363d; color:#f0f6fc; font-weight:800; }
+        .liq-target-main strong { display:block; color:#f0f6fc; }
+        .liq-target-main small { display:block; margin-top:3px; color:#8b949e; }
+        .liq-target-price { color:#f2cc60; font-size:1rem; font-weight:800; white-space:nowrap; }
+        .liq-target-density { color:#c9d1d9; font-size:.82rem; text-align:right; white-space:nowrap; }
+        .liq-target-density small { display:block; color:#8b949e; }
+        .liq-definition { border:1px solid #30363d; border-radius:8px; background:#0d1117; }
+        .liq-definition summary { padding:12px; color:#79c0ff; cursor:pointer; font-weight:800; }
+        .liq-definition .body { padding:0 12px 12px; color:#c9d1d9; font-size:.84rem; line-height:1.55; }
+        .liq-source-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+        .liq-source { min-width:0; padding:14px; border:1px solid #30363d; border-radius:8px; background:#0d1117; }
+        .liq-source.observed { border-top:3px solid #3fb950; }
+        .liq-source.estimated { border-top:3px solid #d29922; }
+        .liq-source h5 { margin:0 0 5px; color:#f0f6fc; font-size:1rem; }
+        .liq-source p { margin:0 0 10px; color:#8b949e; font-size:.78rem; line-height:1.45; }
+        .liq-balance { display:flex; height:14px; overflow:hidden; border-radius:5px; background:#30363d; }
+        .liq-balance .bid { background:#238636; }
+        .liq-balance .ask { background:#da3633; }
+        .liq-balance-labels { display:flex; justify-content:space-between; margin-top:6px; font-size:.77rem; }
+        .liq-table-wrap { overflow:auto; border:1px solid #30363d; border-radius:7px; }
+        .liq-table { width:100%; min-width:650px; border-collapse:collapse; font-size:.78rem; }
+        .liq-table th { position:sticky; top:0; z-index:1; padding:8px; background:#161b22; color:#8b949e; text-align:left; text-transform:uppercase; letter-spacing:.05em; font-size:.65rem; }
+        .liq-table td { padding:8px; border-top:1px solid #21262d; color:#c9d1d9; white-space:nowrap; }
+        .liq-table tr:hover td { background:#1f6feb12; }
+        .liq-health-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }
+        .liq-health-item { padding:10px; border:1px solid #30363d; border-radius:7px; background:#0d1117; }
+        .liq-health-item span { display:block; color:#8b949e; font-size:.68rem; }
+        .liq-health-item strong { display:block; margin-top:4px; color:#f0f6fc; font-size:.88rem; overflow-wrap:anywhere; }
+        .liq-muted { color:#8b949e; font-size:.78rem; line-height:1.45; }
+        @media (max-width:1000px) { .liq-summary-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } .liq-health-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+        @media (max-width:700px) {
+            #header { align-items:flex-start; }
+            #header a { font-size:1rem; }
+            .tab-group-label { display:none; }
+            .liq-hero { flex-direction:column; padding:15px; }
+            .liq-live-box { width:100%; box-sizing:border-box; }
+            .liq-summary-grid, .liq-source-grid, .liq-two-col { grid-template-columns:1fr; }
+            .liq-health-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+            .liq-target-row { grid-template-columns:28px 1fr; }
+            .liq-target-price, .liq-target-density { grid-column:2; text-align:left; }
+            .liq-target-density small { display:inline; margin-left:5px; }
+            .liq-section { padding:12px; }
+            .liq-section-head { flex-direction:column; }
+        }
+        @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior:auto !important; transition:none !important; animation:none !important; } }
     </style>
 </head>
 <body>
@@ -345,9 +451,9 @@
                 <span id="ls"></span>
             </div>
             <div id="tf" style="display:flex;gap:3px;margin-left:10px;"></div>
-            <button id="liveBtn" style="opacity: 0.55;">LIVE</button>
+            <button id="liveBtn" aria-label="Canlı məlumat axınını aktivləşdir" style="opacity: 0.55;">LIVE</button>
         </div>
-        <div id="tabs"></div>
+        <nav id="tabs" aria-label="Əsas bölmələr"></nav>
         <div id="chart-container">
             <div id="ct"></div>
             <div id="drawing-toolbar" aria-label="Chart drawing tools">
@@ -571,7 +677,7 @@
         function saveLiquidityArchiveEvent(ev){var arr=loadLiquidityArchive();arr.push(ev);if(arr.length>120)arr=arr.slice(-120);localStorage.setItem(liqArchiveKey(),JSON.stringify(arr));archiveCollector('website_liquidity_sweep_expectation',ev.timeframe||curTF,[ev]);return arr;}
         function analyzeOrderbookDepth(depth,tf){var bids=(depth.bids||[]).map(function(x){return {price:+x[0],qty:+x[1],notional:+x[0]*+x[1],side:'bid'};}).filter(function(x){return isFinite(x.notional)&&x.notional>0;});var asks=(depth.asks||[]).map(function(x){return {price:+x[0],qty:+x[1],notional:+x[0]*+x[1],side:'ask'};}).filter(function(x){return isFinite(x.notional)&&x.notional>0;});var bestBid=bids.length?bids[0].price:null,bestAsk=asks.length?asks[0].price:null,mid=(bestBid&&bestAsk)?(bestBid+bestAsk)/2:null;var spread=(bestBid&&bestAsk)?bestAsk-bestBid:null;return {status:'PASS',time_utc:new Date().toISOString().slice(0,19),symbol:SYMBOL,timeframe:tf,orderbook:{best_bid:bestBid,best_ask:bestAsk,mid:mid,spread:spread,bids:bids.slice(0,10),asks:asks.slice(0,10)},zones:{next_sweep:{price:null,side:null,timeframe:tf}},archive:loadLiquidityArchive()};}
         function loadOrderbookLiquidity(){return Promise.reject(new Error('Orderbook depth endpoint is not deployed; no proxy numeric liquidity is generated.'));}
-        function liquidityMapView(j){var ob=j.orderbook||{},z=j.zones||{},arch=j.archive||[];function row(x,cls){return '<tr><td>'+esc(x.side==='ask'?'🔴 above':'🟢 below')+'</td><td>$'+fmtNum(x.price,2)+'</td><td>'+fmtNum(x.qty,4)+'</td><td>$'+fmtNum(x.notional,0)+'</td><td>'+fmtNum(x.distance_pct,3)+'%</td></tr>';}
+        function legacyLiquidityMapView(j){var ob=j.orderbook||{},z=j.zones||{},arch=j.archive||[];function row(x,cls){return '<tr><td>'+esc(x.side==='ask'?'🔴 above':'🟢 below')+'</td><td>$'+fmtNum(x.price,2)+'</td><td>'+fmtNum(x.qty,4)+'</td><td>$'+fmtNum(x.notional,0)+'</td><td>'+fmtNum(x.distance_pct,3)+'%</td></tr>';}
         var next=z.next_sweep||{};return '<div class="term-grid">'+pill('Status',j.status==='PASS',j.status)+pill('Updated UTC',true,j.time_utc||'')+card('Current orderbook','Bid: <b>$'+fmtNum(ob.best_bid,2)+'</b><br>Ask: <b>$'+fmtNum(ob.best_ask,2)+'</b><br>Mid: <b>$'+fmtNum(ob.mid,2)+'</b><br>Spread: <b>$'+fmtNum(ob.spread,2)+'</b>')+card('💢 Next expected liquidity clean','<b>'+esc(next.side==='ask'?'UP / red ask wall':'DOWN / green bid wall')+'</b><br>Price: <b>$'+fmtNum(next.price,2)+'</b><br>Date: '+(next.time?new Date(next.time).toLocaleString():'N/A')+'')+'</div>'+card('Liquidity Archive (Last 5)','<table class="term-table"><tr><th>Side</th><th>Price</th><th>Qty</th><th>Notional</th><th>Dist %</th></tr>'+arch.slice(-5).map(function(x){return row(x);}).join('')+'</table>');}
         function renderLiquidityMapTab(j){window.__nceLiquidity=j;var term=document.getElementById('terminal');if(term)term.innerHTML=liquidityMapView(j);return j;}
         function loadLiquidityMapLocal(tf){return apiGet('/api/v1/liquidity/state?tf='+encodeURIComponent(tf)).catch(function(e){console.warn('liquidity map API failed',e&&e.message||e);return loadOrderbookLiquidity(tf).then(function(ob){return Object.assign(ob,{warning:'Orderbook depth unavailable; showing proxy liquidity.'});});});}
@@ -1167,7 +1273,7 @@
           return '<div class="pm-engine"><div class="pm-summary"><div class="cf-kicker">NCE PROBABILITY MAP ENGINE</div><h3>PROBABILITY MAP SUMMARY</h3><p>'+esc(j.summary||'Yeterli gerçek veriyle hedef özeti üretilemedi.')+'</p><div class="pm-legend" style="margin-top:12px"><span>Liquidity Engine: REAL</span><span class="pm-estimated">Liquidation Engine: ESTIMATED</span><span>Probability: '+esc((j.rules||{}).probabilityStatus||'UNAVAILABLE')+'</span><span>Score ≠ Probability</span></div></div><div class="pm-controls"><b>Heatmap market</b><button class="'+(probabilityMapMarket==='futures'?'on':'')+'" onclick="probabilityMapMarket=\'futures\';setTab(activePanelName,true)">Futures</button><button class="'+(probabilityMapMarket==='spot'?'on':'')+'" onclick="probabilityMapMarket=\'spot\';setTab(activePanelName,true)">Spot</button><span class="pm-muted">Resting notional and estimated liquidation notional have separate meanings.</span></div><div class="term-grid">'+pill('Current price',!!j.currentPrice,'$'+fmtNum(j.currentPrice,2))+pill('Primary target',!!primary.targetCenter,primary.targetCenter?'$'+fmtNum(primary.targetCenter,2):'UNAVAILABLE')+pill('P(1h)',p.hit1h!=null,p.hit1h!=null?fmtNum(p.hit1h*100,0)+'%':'UNAVAILABLE')+pill('First-hit',p.firstHit!=null,p.firstHit!=null?fmtNum(p.firstHit*100,0)+'%':'UNAVAILABLE')+pill('ETA',!!(primary.eta||{}).medianMinutes,primary.eta&&primary.eta.medianMinutes?fmtNum(primary.eta.medianMinutes,0)+'m':'UNAVAILABLE')+pill('Confidence',primary.confidence!=null,primary.confidence!=null?fmtNum(primary.confidence,0):'UNAVAILABLE')+'</div><div class="pm-targets-wrap"><h3>TOP PROBABILITY TARGETS</h3><table class="pm-targets"><thead><tr><th>Zone</th><th>Type / confluence</th><th>Distance</th><th>Attraction</th><th>P15</th><th>P30</th><th>P1h</th><th>P4h</th><th>First-hit</th><th>ETA</th><th>Confidence</th></tr></thead><tbody>'+targetRows+'</tbody></table>'+(targets.length?'':'<div class="pm-muted">No candidate target is supported by available data.</div>')+'</div><div class="pm-detail">'+card('WHY',evidence(primary.why))+card('AGAINST',evidence(primary.against))+card('MISSING',evidence(primary.missing),'backend-warn')+card('Volume Profile','POC: <b>$'+fmtNum(hp.poc,2)+'</b><br>VAH: $'+fmtNum(hp.vah,2)+' · VAL: $'+fmtNum(hp.val,2)+'<br>Status: '+esc(hp.status||'UNAVAILABLE'))+'</div><div class="pm-targets-wrap"><h3>LIQUIDITY ENGINE · '+esc((j.market||probabilityMapMarket).toUpperCase())+'</h3><div class="pm-muted">ADDED / RESTING / EXECUTED / CANCELLED / REPLENISHED / DEPLETED remain separate; displayed wall is not executed flow.</div><table class="pm-targets"><thead><tr><th>Side</th><th>Price</th><th>Displayed</th><th>Executed</th><th>Cancelled</th><th>Replenished</th><th>Classification</th></tr></thead><tbody>'+liqRows+'</tbody></table></div><div class="pm-targets-wrap"><h3 class="pm-estimated">ESTIMATED LIQUIDATION HEATMAP</h3><div class="pm-muted">Binance public data cannot reveal all account liquidation prices. These are OI-cohort projections and must not be read as observed account totals.</div><table class="pm-targets"><thead><tr><th>Side</th><th>Zone</th><th>Estimated notional</th><th>Distance ATR</th><th>Cascade</th><th>Confidence</th></tr></thead><tbody>'+liqMapRows+'</tbody></table></div><div class="pm-targets-wrap"><h3>PROBABILITY MAP DATA HEALTH</h3><table class="pm-targets"><thead><tr><th>Source</th><th>Status</th><th>Coverage</th><th>Confidence</th><th>Reason</th></tr></thead><tbody>'+healthRows+'</tbody></table></div><div class="decision-meta">'+esc(j.tradeContract||'Research/ranking output only; no automatic execution.')+'</div></div>';
         }
 
-        function liquidityMapView(j) {
+        function legacyEnhancedLiquidityMapView(j) {
           var ob = (j && j.orderbook) || j || {}, hm = (j && j.heatmap) || {};
           var verdict = ob.verdict || 'UNKNOWN';
           var verdictCls = verdict === 'BID_DOMINANT' ? 'backend-ok' : (verdict === 'ASK_DOMINANT' ? 'backend-bad' : 'backend-warn');
@@ -1239,6 +1345,128 @@
           var bookAge = ob.data_health && ob.data_health.book_age_s != null ? fmtNum(ob.data_health.book_age_s,1) + 's' : '—';
           return heatmapHtml() + '<div class="pm-engine"><div class="pm-summary"><div class="cf-kicker">NCE CANLI ORDER BOOK</div><h3>LIVE BID/ASK LIKIDITE</h3><p>Binance Futures BTCUSDT · 1000 seviye tam kitap · <b>her 1 sn tazelenir</b> · Coinglass benzeri canlı görünüm.</p><div class="pm-legend"><span>Status: <b>' + esc(ob.status || 'UNKNOWN') + '</b></span><span>Kitap yaşı: <b>' + bookAge + '</b></span><span>Son güncelleme: <b>' + lastUpdate + '</b></span><span>Fiyat: <b>$' + fmtNum(ob.price,1) + '</b></span><span>Spread: <b>' + fmtNum(ob.spread_bps,2) + ' bps</b></span></div></div><div class="term-grid">' + card('📊 Bid/Ask Dengesi', shareBar() + '<br><b class="' + verdictCls + '">' + esc(verdict) + '</b><br>Bid toplam: <b>' + fmtNum(ob.bid_total_btc,1) + '</b> BTC (' + fmtNum(ob.bid_count||0,0) + ' seviye) · $' + fmtNum(ob.bid_notional_usd,0) + '<br>Ask toplam: <b>' + fmtNum(ob.ask_total_btc,1) + '</b> BTC (' + fmtNum(ob.ask_count||0,0) + ' seviye) · $' + fmtNum(ob.ask_notional_usd,0)) + card('👀 Büyük Emirler (≥15 BTC / ≥$1M)', bigHtml) + card('🔭 Uç Noktalar — uzak büyük emirler', extHtml) + card('💡 Niyet Açıklaması', '<b>SPOOF_SUSPECT</b>: emir görünüp kayboluyor, trade eşleşmesi yok → aldatma şüphesi.<br><b>LIKIDITE_ZONE</b>: kalıcı büyük emir, trade akışıyla destekleniyor → gerçek likidite bölgesi potansiyeli.<br><b>UNCONFIRMED</b>: henüz yeterli kanıt yok.') + '</div><div class="pm-targets-wrap"><h3>DATA HEALTH</h3><table class="pm-targets"><thead><tr><th>Metrik</th><th>Değer</th></tr></thead><tbody><tr><td>WS bağlantısı</td><td>' + (ob.data_health && ob.data_health.ws_connected ? '✅ CONNECTED' : '❌ DISCONNECTED') + '</td></tr><tr><td>Kitap yaşı</td><td>' + bookAge + '</td></tr><tr><td>REST resync</td><td>' + fmtNum((ob.data_health||{}).resync_count||0,0) + '</td></tr><tr><td>Seq gap</td><td>' + fmtNum((ob.data_health||{}).seq_gap_count||0,0) + '</td></tr></tbody></table></div></div>';
         }
+
+        /* Decision-first liquidation map. The model remains explicitly estimated;
+           observed order-book data is never presented as liquidation probability. */
+        function liquidityMapView(j) {
+          var ob = (j && j.orderbook) || {};
+          var hm = (j && j.heatmap) || {};
+          var dh = ob.data_health || {};
+          var hdh = hm.data_health || {};
+          function f(x, d) { return x == null || !isFinite(Number(x)) ? '—' : fmtNum(x, d == null ? 1 : d); }
+          function n(x) { var v = Number(x); return isFinite(v) ? v : null; }
+          function pct(x) { return x == null || !isFinite(Number(x)) ? '—' : fmtNum(x, 1) + '%'; }
+          function sideFor(price, current) { return n(price) != null && n(current) != null && Number(price) < Number(current) ? 'LONG' : 'SHORT'; }
+          function sideText(side) { return side === 'LONG' ? 'Aşağıda · LONG likvidasiyası' : 'Yuxarıda · SHORT likvidasiyası'; }
+          function sideClass(side) { return side === 'LONG' ? 'backend-bad' : 'backend-ok'; }
+          function dateLabel(value) {
+            if (!value) return '—';
+            var d = new Date(value);
+            return isNaN(d.getTime()) ? esc(String(value)) : d.toISOString().slice(11, 19) + ' UTC';
+          }
+          function ageSeconds(value, explicit) {
+            var x = n(explicit);
+            if (x != null) return Math.max(0, x);
+            if (!value) return null;
+            var ms = Date.now() - new Date(value).getTime();
+            return isFinite(ms) ? Math.max(0, ms / 1000) : null;
+          }
+          function ageLabel(age) {
+            if (age == null) return 'Yaş: məlum deyil';
+            if (age < 60) return 'Yaş: ' + f(age, 1) + ' san';
+            if (age < 3600) return 'Yaş: ' + f(age / 60, 1) + ' dəq';
+            return 'Yaş: ' + f(age / 3600, 1) + ' saat';
+          }
+          function freshness(age, limit) {
+            return age != null && age <= limit ? '<span class="liq-status fresh">● AKTUAL</span>' : '<span class="liq-status stale">● KÖHNƏ DATA</span>';
+          }
+          function verdictText(v) {
+            return { 'LIKIDITE_ZONE':'Likvidlik zonası', 'SPOOF_SUSPECT':'Spoof şübhəsi', 'UNCONFIRMED':'Təsdiqlənməyib' }[v] || v || 'Təsdiqlənməyib';
+          }
+          var mark = n(hm.mark) != null ? n(hm.mark) : n(ob.price);
+          var bins = (hm.bins || []).map(function(x) { return { price:n(x.price), liq:n(x.liq_btc), side:x.side }; }).filter(function(x) { return x.price != null && x.liq != null && x.liq >= 0; });
+          var ranked = bins.slice().sort(function(a,b) { return b.liq - a.liq; });
+          var peaks = (hm.peaks || []).map(function(x) { return { price:n(x.price), liq:n(x.liq_btc), side:x.side }; }).filter(function(x) { return x.price != null && x.liq != null; });
+          if (!peaks.length) peaks = ranked.slice();
+          peaks.sort(function(a,b) { return b.liq - a.liq; });
+          var topTargets = peaks.slice(0, 5);
+          var nearest = hm.nearest_big && n(hm.nearest_big.price) != null ? { price:n(hm.nearest_big.price), liq:n(hm.nearest_big.liq_btc), side:hm.nearest_big.side } : null;
+          if (!nearest && mark != null && bins.length) {
+            nearest = bins.slice().sort(function(a,b) { return Math.abs(a.price - mark) - Math.abs(b.price - mark); })[0];
+          }
+          var largest = topTargets[0] || null;
+          var nearestSide = nearest ? (nearest.side || sideFor(nearest.price, mark)) : null;
+          var largestSide = largest ? (largest.side || sideFor(largest.price, mark)) : null;
+          var verdict = String(ob.verdict || 'BALANCED').toUpperCase();
+          var orderBias = verdict === 'BID_DOMINANT' ? 'Yuxarı dəstək' : (verdict === 'ASK_DOMINANT' ? 'Aşağı təzyiq' : 'Balanslı');
+          var bidShare = n(ob.bid_share_pct), askShare = n(ob.ask_share_pct);
+          var bookAge = ageSeconds(ob.time_utc, dh.book_age_s);
+          var liqTime = hdh.last_update || hm.time_utc;
+          var liqAge = ageSeconds(liqTime);
+          var trades5m = n(dh.trades_5m);
+          var bookFresh = freshness(bookAge, 10);
+          var liqFresh = freshness(liqAge, 90);
+          var overall = (String(ob.status || '').toUpperCase() === 'LIVE' && String(hm.status || '').toUpperCase() === 'LIVE') ? 'MIXED · ehtiyatlı oxu' : 'QİSMƏN MÖVCUD';
+          var tradeHint = trades5m === 0 ? 'Son 5 dəqiqədə təsdiqlənmiş trade yoxdur; böyük əmrlərin niyyəti hələ təsdiqlənməyib.' : (trades5m != null ? 'Son 5 dəqiqədə ' + f(trades5m,0) + ' trade müşahidə edilib.' : 'Trade təsdiqi barədə məlumat yoxdur.');
+          var thresholdQty = n(ob.big_order_threshold_qty_btc) || 15;
+          var thresholdUsd = n(ob.big_order_threshold_notional_usd) || 1000000;
+          var bigOrders = (ob.big_orders || []).filter(function(x) { return (n(x.qty_btc) || 0) >= thresholdQty || (n(x.notional_usd) || 0) >= thresholdUsd; });
+          var chartBins = ranked.slice(0, 60);
+          if (mark != null && chartBins.length && !chartBins.some(function(x) { return Math.abs(x.price - mark) < 1; })) chartBins.push({ price:mark, liq:0, side:'MARK' });
+          chartBins.sort(function(a,b) { return b.price - a.price; });
+
+          function heatmapSvg(list) {
+            if (!list.length) return '<div class="liq-muted" style="padding:28px">Likvidasiya datası mövcud deyil.</div>';
+            var W = 1000, left = 155, right = 165, top = 26, rowH = Math.max(8, Math.min(14, 360 / list.length)), H = top + list.length * rowH + 30;
+            var maxV = Math.max.apply(null, list.map(function(x) { return x.liq; })) || 1;
+            var maxP = list[0].price, minP = list[list.length - 1].price;
+            var markY = mark != null && maxP !== minP ? top + ((maxP - mark) / (maxP - minP)) * ((list.length - 1) * rowH) + rowH / 2 : null;
+            var out = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Təxmini likvidasiya sıxlığı xəritəsi" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#0d1117"/><text x="18" y="16" fill="#8b949e" font-size="12">Qiymət</text><text x="' + (W - 135) + '" y="16" fill="#8b949e" font-size="12">Təxmini sıxlıq</text>';
+            for (var i = 0; i < list.length; i++) {
+              var x = list[i], y = top + i * rowH, ratio = Math.max(.03, x.liq / maxV), color = mark != null && x.price < mark ? '#f85149' : '#3fb950';
+              var label = i % 5 === 0 || i === list.length - 1 ? '<text x="18" y="' + (y + rowH) + '" fill="#c9d1d9" font-size="11">$' + f(x.price,0) + '</text>' : '';
+              var row = '<line x1="' + left + '" y1="' + (y + rowH / 2) + '" x2="' + (W - right) + '" y2="' + (y + rowH / 2) + '" stroke="#21262d" stroke-width="1"/><rect x="' + left + '" y="' + (y + 2) + '" width="' + Math.round((W - left - right) * ratio) + '" height="' + Math.max(4, rowH - 4) + '" rx="3" fill="' + color + '" fill-opacity=".78" stroke="' + color + '" stroke-dasharray="4 3"/><text x="' + (W - right + 14) + '" y="' + (y + rowH) + '" fill="#c9d1d9" font-size="11">' + f(x.liq,0) + ' BTC</text>';
+              out += label + row;
+            }
+            if (markY != null && markY >= top && markY <= H - 20) out += '<line x1="0" y1="' + markY + '" x2="' + W + '" y2="' + markY + '" stroke="#58a6ff" stroke-width="2" stroke-dasharray="7 5"/><rect x="' + (W - 132) + '" y="' + (markY - 13) + '" width="122" height="20" rx="4" fill="#1f6feb"/><text x="' + (W - 122) + '" y="' + (markY + 1) + '" fill="#fff" font-size="11" font-weight="700">MARK $' + f(mark,0) + '</text>';
+            return out + '</svg>';
+          }
+          function targetRow(x, i) {
+            var direction = x.side || sideFor(x.price, mark), distance = mark != null ? ((x.price - mark) / mark) * 100 : null;
+            var isNearest = nearest && Math.abs(nearest.price - x.price) < .01;
+            return '<div class="liq-target-row' + (isNearest ? ' nearest' : '') + '"><span class="liq-rank">' + (i + 1) + '</span><div class="liq-target-main"><strong class="' + sideClass(direction) + '">' + sideText(direction) + '</strong><small>' + (isNearest ? 'Ən yaxın böyük zona · ' : '') + (distance == null ? 'Mark fərqi məlum deyil' : 'Mark fərqi: ' + (distance >= 0 ? '+' : '') + f(distance,2) + '%') + '</small></div><span class="liq-target-price">$' + f(x.price,0) + '</span><span class="liq-target-density"><b>' + f(x.liq,0) + ' BTC</b><small>Model sıxlığı</small></span></div>';
+          }
+          function largeOrderRows(list) {
+            return list.slice(0, 20).map(function(x) {
+              var v = x.verdict || 'UNCONFIRMED', cls = v === 'LIKIDITE_ZONE' ? 'backend-ok' : (v === 'SPOOF_SUSPECT' ? 'backend-bad' : 'backend-warn');
+              return '<tr><td>' + (x.side === 'ask' ? '🔴 ASK' : '🟢 BID') + '</td><td>$' + f(x.price,1) + '</td><td>' + f(x.qty_btc,2) + ' BTC</td><td>$' + f(x.notional_usd,0) + '</td><td>' + f(x.distance_bps,1) + ' bps</td><td>' + f(x.age_s,0) + ' san</td><td class="' + cls + '" title="' + esc(v) + '">' + esc(verdictText(v)) + '</td></tr>';
+            }).join('');
+          }
+          var bidWidth = bidShare != null ? Math.max(0, Math.min(100, bidShare)) : 50;
+          var targetHtml = topTargets.length ? topTargets.map(targetRow).join('') : '<div class="liq-muted">Modelə görə dəstəklənən zona yoxdur.</div>';
+          var peakNote = 'Model sıxlığına görə sıralanıb; riyazi ehtimal və real hesab likvidasiya cəmi deyil.';
+          var summaryAlert = '<div class="liq-alert"><strong>İndi nəyi izləməli?</strong> ' + (nearest ? 'Qiymətə ən yaxın namizəd <b>$' + f(nearest.price,0) + '</b> səviyyəsidir (' + esc(sideText(nearestSide)) + '). Bu səviyyəyə yaxınlaşanda order-flow təsdiqi axtar.' : 'Etibarlı yaxın likvidasiya namizədi hazırda yoxdur.') + ' <span class="liq-muted">' + esc(tradeHint) + '</span></div>';
+          var methodology = '<details class="liq-definition"><summary>Likvidasiya bölgəsi nədir və necə oxunmalıdır?</summary><div class="body"><b>Likvidasiya bölgəsi</b> leverage istifadə edən mövqelərin məcburi bağlana biləcəyi təxmini qiymət klasteridir. Bu paneldəki xəritə 7 günlük giriş həcmi, open interest və leverage paylanması əsasında qurulan <b>ESTIMATED</b> modeldir; real hesab səviyyələrini müşahidə etmir. Sıralama “ən çox təxmini sıxlıq” deməkdir, “qiymət mütləq ora gedəcək” demək deyil.</div></details>';
+          var bookCard = '<div class="liq-source observed"><h5><span class="liq-status real">OBSERVED · REAL</span> Canlı order book</h5><p>Hazırda birjada görünən resting bid/ask likvidliyidir. Bu, likvidasiya deyil və ayrıca oxunmalıdır.</p><div class="liq-balance"><span class="bid" style="width:' + bidWidth + '%"></span><span class="ask" style="width:' + (100 - bidWidth) + '%"></span></div><div class="liq-balance-labels"><span class="backend-ok">Bid ' + pct(bidShare) + '</span><span class="backend-bad">Ask ' + pct(askShare) + '</span></div><p style="margin-top:10px"><b>' + esc(orderBias) + '</b> · Spread: ' + f(ob.spread_bps,2) + ' bps · ' + bookFresh + '<br>Son yenilənmə: ' + dateLabel(ob.time_utc) + '</p></div>';
+          var estCard = '<div class="liq-source estimated"><h5><span class="liq-status estimated">ESTIMATED · MODEL</span> Likvidasiya bölgələri</h5><p>Open interest və leverage fərziyyələrindən çıxan təxmini məcburi bağlanma klasterləridir. Faktiki hesab səviyyələri deyil.</p><p><b>Mark:</b> $' + f(mark,0) + ' · <b>Long payı:</b> ' + pct(hm.long_share != null ? Number(hm.long_share) * 100 : null) + ' · <b>Short payı:</b> ' + pct(hm.short_share != null ? Number(hm.short_share) * 100 : null) + '</p><p>' + liqFresh + ' · Son yenilənmə: ' + dateLabel(liqTime) + '</p></div>';
+          var bigTable = bigOrders.length ? '<div class="liq-table-wrap"><table class="liq-table" aria-label="Filtrdən keçmiş böyük orderlər"><thead><tr><th>Side</th><th>Qiymət</th><th>Həcm</th><th>Notional</th><th>Məsafə</th><th>Yaş</th><th>Niyyət</th></tr></thead><tbody>' + largeOrderRows(bigOrders) + '</tbody></table></div>' : '<div class="liq-muted">Eşikdən yuxarı order yoxdur. Eşik: ≥' + f(thresholdQty,0) + ' BTC və ya ≥$' + f(thresholdUsd,0) + '.</div>';
+          var liveEvents = (hm.liquidations || []).slice(0, 15);
+          var eventTable = liveEvents.length ? '<div class="liq-table-wrap"><table class="liq-table" aria-label="Son likvidasiya hadisələri"><thead><tr><th>Side</th><th>Qiymət</th><th>Miqdar</th><th>USD</th><th>UTC</th></tr></thead><tbody>' + liveEvents.map(function(x) { return '<tr><td>' + (x.side === 'SELL' ? '🔴 SELL' : '🟢 BUY') + '</td><td>$' + f(x.price,1) + '</td><td>' + f(x.qty,4) + ' BTC</td><td>$' + f(x.usd,0) + '</td><td>' + esc((x.ts || '').slice(11,19)) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<div class="liq-muted">Son 10 dəqiqədə forceOrder hadisəsi yoxdur. Bu, bazarın sakit olduğunu göstərə bilər; model zonaları isə ayrıca qalır.</div>';
+          var autoLabel = liqAutoRefresh ? '⏱ Auto: Açıq' : '⏸ Auto: Dayandırılıb';
+          return '<div class="liq-dashboard" aria-labelledby="liq-title"><section class="liq-hero"><div><div class="liq-kicker">NCE · QƏRAR YÖNÜMLÜ XƏRİTƏ</div><h3 id="liq-title">Likvidasiya bölgələri və növbəti hədəflər</h3><p>Bu panelin məqsədi qiymətin hansı zonalara yaxınlaşanda leveraged mövqelərin məcburi bağlanma təzyiqi yarada biləcəyini göstərməkdir.</p><div class="liq-purpose"><b>İlk baxışda cavab:</b> hazırkı qiymət $' + f(mark,0) + '; ən yaxın namizəd ' + (nearest ? '$' + f(nearest.price,0) + ' · ' + esc(sideText(nearestSide)) : 'məlum deyil') + '; məlumat qarışıqdır — canlı order book, təxmini liquidation modelidir.</div></div><div class="liq-live-box"><span class="label">Ümumi data vəziyyəti</span><strong>' + esc(overall) + '</strong><small>Order book: ' + (String(ob.status || '').toUpperCase() === 'LIVE' ? 'canlı' : 'məhdud') + '<br>Liquidation: ' + (String(hm.status || '').toUpperCase() === 'LIVE' ? 'model aktivdir' : 'mövcud deyil') + '</small></div></section>' +
+            '<div class="liq-summary-grid"><div class="liq-kpi bias"><span class="label">Order-book istiqaməti</span><span class="value">' + esc(orderBias) + '</span><span class="detail">Bid ' + pct(bidShare) + ' · Ask ' + pct(askShare) + '</span></div><div class="liq-kpi near"><span class="label">Ən yaxın risk zonası</span><span class="value">' + (nearest ? '$' + f(nearest.price,0) : '—') + '</span><span class="detail">' + (nearest ? esc(sideText(nearestSide)) + ' · ' + f(nearest.liq,0) + ' BTC' : 'Namizəd yoxdur') + '</span></div><div class="liq-kpi largest"><span class="label">Ən böyük model zonası</span><span class="value">' + (largest ? '$' + f(largest.price,0) : '—') + '</span><span class="detail">' + (largest ? esc(sideText(largestSide)) + ' · ' + f(largest.liq,0) + ' BTC' : 'Namizəd yoxdur') + '</span></div><div class="liq-kpi"><span class="label">Mark qiyməti</span><span class="value">$' + f(mark,0) + '</span><span class="detail">Timeframe: ' + esc(curTF || '1h') + '</span></div><div class="liq-kpi confidence"><span class="label">Data confidence</span><span class="value">' + esc(overall) + '</span><span class="detail">Estimated data trade siqnalı deyil</span></div></div>' + summaryAlert +
+            '<section class="liq-section"><div class="liq-section-head"><div><h4>Ən böyük ehtimallı gedəcəyi likvidasiya bölgələri</h4><p>' + esc(peakNote) + '</p></div><div class="liq-controls"><button type="button" onclick="refreshLiquidationPanel()">↻ İndi yenilə</button><button type="button" onclick="toggleLiqAutoRefresh(this)">' + autoLabel + '</button><select aria-label="Yenilənmə intervalı" onchange="setLiqRefreshRate(this.value)"><option value="5000"' + (liqRefreshMs === 5000 ? ' selected' : '') + '>5 san</option><option value="10000"' + (liqRefreshMs === 10000 ? ' selected' : '') + '>10 san</option><option value="30000"' + (liqRefreshMs === 30000 ? ' selected' : '') + '>30 san</option></select></div></div><div class="liq-target-list">' + targetHtml + '</div></section>' +
+            '<section class="liq-section"><div class="liq-section-head"><div><h4>Likvidasiya sıxlığı xəritəsi</h4><p>Mavi xətt mark qiymətidir. Qırmızı: markın aşağısında LONG likvidasiyası; yaşıl: markın yuxarısında SHORT likvidasiyası. Kontur xəritənin təxmini olduğunu göstərir.</p></div><span class="liq-status estimated">ESTIMATED · müşahidə olunmuş hesab səviyyəsi deyil</span></div><div class="liq-chart-shell">' + heatmapSvg(chartBins) + '</div><div class="liq-chart-legend"><span class="long">🔻 LONG likvidasiyası</span><span class="short">🔺 SHORT likvidasiyası</span><span>— MARK qiyməti</span><span>BTC miqdarı = model sıxlığı</span></div></section>' +
+            '<div class="liq-two-col"><section class="liq-section"><div class="liq-section-head"><div><h4>Məlumat mənbələrini ayrı oxu</h4><p>Real order book ilə təxmini liquidation modelini bir-birinə qarışdırmırıq.</p></div></div><div class="liq-source-grid">' + bookCard + estCard + '</div></section><section class="liq-section"><div class="liq-section-head"><div><h4>Bu an nəyi izləməli?</h4><p>İlk əməliyyat qərarı üçün qısa checklist.</p></div></div><ol class="liq-muted" style="margin:0;padding-left:22px;line-height:1.8"><li>Ən yaxın zonaya məsafəni yoxla: <b>$' + (nearest ? f(nearest.price,0) : '—') + '</b></li><li>Qiymət yaxınlaşanda order-flow və trade təsdiqi axtar.</li><li>Zone model olduğu üçün təkbaşına giriş siqnalı kimi istifadə etmə.</li><li>Data köhnədirsə, gözlə və yenilə.</li></ol></section></div>' +
+            '<section class="liq-section"><div class="liq-section-head"><div><h4>OBSERVED · Böyük orderlər</h4><p>Yalnız ≥' + f(thresholdQty,0) + ' BTC və ya ≥$' + f(thresholdUsd,0) + ' notional həddini keçən real resting orderlər göstərilir.</p></div><span class="liq-status real">REAL · order book</span></div>' + bigTable + '</section>' +
+            '<section class="liq-section"><div class="liq-section-head"><div><h4>ESTIMATED · Son real likvidasiya hadisələri</h4><p>ForceOrder axını hesab səviyyələrinin tam xəritəsi deyil; yalnız baş vermiş hadisələri göstərir.</p></div><span class="liq-status estimated">MODEL + FORCEORDER</span></div>' + eventTable + '</section>' +
+            '<section class="liq-section"><div class="liq-section-head"><div><h4>Data health</h4><p>Texniki statusun istifadəçi dilində izahı.</p></div></div><div class="liq-health-grid"><div class="liq-health-item"><span>Order book</span><strong>' + (String(ob.status || '').toUpperCase() === 'LIVE' ? '● CONNECTED' : '○ MƏHDUD') + '<br>' + ageLabel(bookAge) + '</strong></div><div class="liq-health-item"><span>Liquidation model</span><strong>' + (String(hm.status || '').toUpperCase() === 'LIVE' ? '● AKTİV' : '○ MÖVCUD DEYİL') + '<br>' + ageLabel(liqAge) + '</strong></div><div class="liq-health-item"><span>Seq gap</span><strong>' + f(dh.seq_gap_count,0) + '<br>' + (n(dh.seq_gap_count) === 0 ? 'Problem görünmür' : 'Yoxlama tələb edir') + '</strong></div><div class="liq-health-item"><span>REST resync</span><strong>' + f(dh.resync_count,0) + '<br>Texniki yenidən sinxronizasiya</strong></div><div class="liq-health-item"><span>Trade təsdiqi</span><strong>' + (trades5m === 0 ? 'Yoxdur' : f(trades5m,0) + ' trade') + '<br>' + (trades5m === 0 ? 'UNCONFIRMED normaldır' : 'Niyyət yoxlanmalıdır') + '</strong></div></div></section>' + methodology + '</div>';
+        }
+
+        var liqAutoRefresh = true, liqRefreshMs = 5000;
+        function refreshLiquidationPanel() { if (typeof panelFromUrl === 'function' && panelFromUrl() === 'Likidite ve Liquidation Haritası') setTab('Likidite ve Liquidation Haritası', true); }
+        function toggleLiqAutoRefresh(button) { liqAutoRefresh = !liqAutoRefresh; if (button) button.textContent = liqAutoRefresh ? '⏱ Auto: Açıq' : '⏸ Auto: Dayandırılıb'; if (liqAutoRefresh) refreshLiquidationPanel(); }
+        function setLiqRefreshRate(value) { var ms = Number(value); if (ms === 5000 || ms === 10000 || ms === 30000) liqRefreshMs = ms; if (liqAutoRefresh) refreshLiquidationPanel(); }
 
         function terminalView(name, j) {
           var pstatus = payloadStatus(j);
@@ -1370,7 +1598,7 @@
               if (currentPanel !== name) window.history.pushState({panel: name}, '', panelUrl.toString());
             }
           } catch (e) {}
-          document.querySelectorAll('#tabs button').forEach(function(b){ b.classList.toggle('on', b.textContent === name); });
+          document.querySelectorAll('#tabs button').forEach(function(b){ var selected = b.textContent === name; b.classList.toggle('on', selected); b.setAttribute('aria-selected', String(selected)); b.tabIndex = selected ? 0 : -1; });
           if (name === 'Grafik') {
             document.body.classList.remove('panel-mode');
             term.style.display = 'none';
@@ -1382,7 +1610,7 @@
           var panelTitle = name === 'Money Flow' ? 'CAPITAL FLOW INTELLIGENCE' : name;
           var existingPanel = document.getElementById('panel-content');
           var keepVisibleWhileRefreshing = !!(fromHistory && existingPanel && previousPanelName === name);
-          if (!keepVisibleWhileRefreshing) term.innerHTML = '<div class="panel-page-head"><button class="panel-back" onclick="setTab(\'Grafik\')">← Qrafikə qayıt</button><h2>' + esc(panelTitle) + '</h2></div><div id="panel-content">' + panelStatus('loading', 'Loading...', name + ' · TF ' + (curTF || '1m')) + '</div>';
+          if (!keepVisibleWhileRefreshing) term.innerHTML = '<div class="panel-page-head"><button class="panel-back" onclick="setTab(\'Grafik\')">← Qrafikə qayıt</button><h2>' + esc(panelTitle) + '</h2></div><div id="panel-content">' + panelStatus('loading', 'Yüklənir...', name + ' · TF ' + (curTF || '1m')) + '</div>';
           resizeChartSafe();
           var tf = curTF || '1m';
           var map = {
@@ -1416,20 +1644,22 @@
                 console.warn('NCE stale response ignored', {panel:name, timeframe:tf, symbol:SYMBOL, requestSequence:panelRequestSeq, activeRequestSequence:activePanelRequestSeq});
                 return;
               }
+              var panelScrollTop = term ? term.scrollTop : 0;
               var content = document.getElementById('panel-content'); if (content) content.innerHTML = terminalView(name, j);
+              if (term) term.scrollTop = panelScrollTop;
               if (name === 'Long/Short Skoru' && panelRequestSeq === activePanelRequestSeq) {
                 decisionRefreshTimer = setTimeout(function(){ if (panelFromUrl() === name) setTab(name, true); }, curTF === '1s' ? 3000 : 15000);
               }
               if (name === 'Likidite ve Liquidation Haritası' && panelRequestSeq === activePanelRequestSeq) {
-                decisionRefreshTimer = setTimeout(function(){ if (panelFromUrl() === name) setTab(name, true); }, 2000);
+                if (liqAutoRefresh) decisionRefreshTimer = setTimeout(function(){ if (panelFromUrl() === name) setTab(name, true); }, liqRefreshMs);
               }
             }).catch(function(e){
               if (panelRequestSeq !== activePanelRequestSeq || activePanelName !== name || curTF !== tf) { console.warn('NCE stale error ignored', {panel:name, timeframe:tf, requestSequence:panelRequestSeq}); return; }
               var content = document.getElementById('panel-content');
-              if (content) { var invalid = e && e.kind === 'invalid'; content.innerHTML = panelStatus('error', invalid ? 'Invalid response' : 'Backend unavailable', invalid ? 'response schema tanınmadı.' : 'Trader Hova məlumatı hazırda yüklənə bilmədi. Səbəb: backend response alınmadı. Yenidən yoxla.'); }
+              if (content) { var invalid = e && e.kind === 'invalid'; content.innerHTML = panelStatus('error', invalid ? 'Cavab formatı səhvdir' : 'Backend əlçatan deyil', invalid ? 'Response sxemi tanınmadı.' : 'Məlumat hazırda yüklənmədi. Yenidən yoxla.'); }
             });
           } else {
-            var content = document.getElementById('panel-content'); if (content) content.innerHTML = panelStatus('warning', 'No data available', 'Bu panel üçün fetch implementasiya edilməyib.');
+            var content = document.getElementById('panel-content'); if (content) content.innerHTML = panelStatus('warning', 'Data mövcud deyil', 'Bu panel üçün məlumat mənbəyi implementasiya edilməyib.');
           }
           resizeChartSafe();
           return;
@@ -1458,6 +1688,48 @@
             b.setAttribute('aria-label', name + ' — paneli aç');
             if (name === 'Grafik') b.classList.add('on');
             bar.appendChild(b);
+          });
+        }
+        var TAB_GROUPS = [
+          { label:'Əsas', items:['Grafik','Likidite ve Liquidation Haritası','Long/Short Skoru','Olasılık Haritası'] },
+          { label:'Axın', items:['Order Flow','Money Flow','Smart Money'] },
+          { label:'Derivativlər', items:['Options','Volume/Market Profile','Makro ve Haber'] },
+          { label:'Araşdırma', items:['Simülasyon','UMPE Skorları','Historical Replay / Backtest'] },
+          { label:'Alətlər', items:['Data Health','Real Trading / Paper','Trader Hova'] }
+        ];
+        function initTabs(){
+          var bar = document.getElementById('tabs');
+          if (!bar) return;
+          bar.innerHTML = '';
+          bar.setAttribute('role','tablist');
+          TAB_GROUPS.forEach(function(group){
+            var wrap = document.createElement('div');
+            wrap.className = 'tab-group';
+            var label = document.createElement('span');
+            label.className = 'tab-group-label';
+            label.textContent = group.label;
+            wrap.appendChild(label);
+            group.items.forEach(function(name){
+              var b = document.createElement('button');
+              var selected = name === 'Grafik';
+              b.type = 'button';
+              b.textContent = name;
+              b.id = 'tab-' + name.toLowerCase().replace(/[^a-z0-9]+/g,'-');
+              b.setAttribute('role','tab');
+              b.setAttribute('aria-selected', String(selected));
+              b.setAttribute('aria-controls','terminal');
+              b.tabIndex = selected ? 0 : -1;
+              b.title = 'Paneli aç: ' + name;
+              b.setAttribute('aria-label', name + ' — paneli aç');
+              b.onclick = function(){ setTab(name); };
+              b.onkeydown = function(e){
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setTab(name); }
+                if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); var next = b.parentElement.querySelectorAll('button'); var i = Array.prototype.indexOf.call(next,b); (next[(i+1)%next.length] || b).focus(); }
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); var prev = b.parentElement.querySelectorAll('button'); var j = Array.prototype.indexOf.call(prev,b); (prev[(j-1+prev.length)%prev.length] || b).focus(); }
+              };
+              wrap.appendChild(b);
+            });
+            bar.appendChild(wrap);
           });
         }
 
