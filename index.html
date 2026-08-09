@@ -1168,12 +1168,55 @@
         }
 
         function liquidityMapView(j) {
-          var ob = j || {}, verdict = ob.verdict || 'UNKNOWN';
+          var ob = (j && j.orderbook) || j || {}, hm = (j && j.heatmap) || {};
+          var verdict = ob.verdict || 'UNKNOWN';
           var verdictCls = verdict === 'BID_DOMINANT' ? 'backend-ok' : (verdict === 'ASK_DOMINANT' ? 'backend-bad' : 'backend-warn');
           var bidShare = ob.bid_share_pct != null ? +ob.bid_share_pct : null, askShare = ob.ask_share_pct != null ? +ob.ask_share_pct : null;
           function shareBar() {
             if (bidShare == null || askShare == null) return '<span class="pm-muted">Denge verisi yok</span>';
             return '<div style="display:flex;align-items:center;gap:6px;font-size:12px"><span style="color:#3fb950;min-width:44px">🟢 Bid ' + fmtNum(bidShare,1) + '%</span><div style="flex:1;height:14px;background:#161b22;border-radius:4px;overflow:hidden;display:flex"><div style="width:' + bidShare + '%;background:#238636"></div><div style="width:' + askShare + '%;background:#da3633"></div></div><span style="color:#f85149;min-width:44px;text-align:right">Ask ' + fmtNum(askShare,1) + '%</span></div>';
+          }
+          function liqBars(list, mark) {
+            var max = 1;
+            (list || []).forEach(function(b){ if (b.liq_btc > max) max = b.liq_btc; });
+            return (list || []).map(function(b){
+              var r = b.liq_btc / max;
+              var col = r >= 0.7 ? '#f85149' : (r >= 0.4 ? '#d29922' : (r >= 0.15 ? '#9e6a03' : '#6e7681'));
+              var side = b.price < mark ? '🔻 LONG' : '🔺 SHORT';
+              var w = Math.round(r * 100);
+              var isMark = mark != null && Math.abs(b.price - mark) < 100;
+              return '<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:2px 0">' +
+                '<span style="min-width:76px;text-align:right;font-family:monospace;color:#8b949e">$' + fmtNum(b.price,0) + '</span>' +
+                (isMark ? '<span style="min-width:66px;color:#58a6ff;font-weight:bold">◀ MARK</span>' : '<span style="min-width:66px;color:#8b949e;font-size:11px">' + side + '</span>') +
+                '<div style="flex:1;height:12px;background:#161b22;border-radius:3px;overflow:hidden"><div style="width:' + w + '%;height:100%;background:' + col + '"></div></div>' +
+                '<span style="min-width:92px;text-align:right;font-family:monospace;color:#c9d1d9"><b>' + fmtNum(b.liq_btc,0) + '</b> BTC</span>' +
+                '</div>';
+            }).join('');
+          }
+          function heatmapHtml() {
+            if (!hm || hm.status !== 'LIVE' || !hm.bins || !hm.bins.length) return '<div class="pm-engine"><span class="pm-muted">Likidasyon heatmap verisi yok (servis hazırlanıyor veya durdu).</span></div>';
+            var mark = hm.mark || ob.price;
+            var top = (hm.bins || []).slice().sort(function(a,b){ return b.liq_btc - a.liq_btc; }).slice(0, 45).sort(function(a,b){ return a.price - b.price; });
+            var peaks = (hm.peaks || []).slice(0, 10);
+            var liqs = (hm.liquidations || []).slice(0, 15);
+            var nb = hm.nearest_big || {};
+            var model = hm.model || {};
+            var levStr = model.lev_dist ? Object.keys(model.lev_dist).map(function(k){ return k + 'x:%' + Math.round((model.lev_dist[k]||0)*100); }).join(', ') : '—';
+            var peakRows = peaks.length
+              ? '<table class="pm-targets"><thead><tr><th>Fiyat</th><th>Liq (BTC)</th><th>Side</th><th>Mark farkı</th></tr></thead><tbody>' + peaks.map(function(p){
+                  var d = mark ? ((p.price - mark) / mark * 100) : 0;
+                  return '<tr><td><b>$' + fmtNum(p.price,0) + '</b></td><td>' + fmtNum(p.liq_btc,0) + ' BTC</td><td>' + (p.side || (p.price < mark ? 'LONG' : 'SHORT')) + '</td><td class="' + (d < 0 ? 'backend-bad' : 'backend-ok') + '">' + (d >= 0 ? '+' : '') + fmtNum(d,2) + '%</td></tr>';
+                }).join('') + '</tbody></table>'
+              : '<span class="pm-muted">Peak yok.</span>';
+            var liqRows = liqs.length
+              ? '<table class="pm-targets"><thead><tr><th>Side</th><th>Fiyat</th><th>Qty</th><th>USD</th><th>UTC</th></tr></thead><tbody>' + liqs.map(function(x){
+                  return '<tr><td>' + (x.side === 'SELL' ? '🔴 SELL' : '🟢 BUY') + '</td><td>$' + fmtNum(x.price,1) + '</td><td>' + fmtNum(x.qty,4) + ' BTC</td><td>$' + fmtNum(x.usd,0) + '</td><td>' + esc((x.ts || '').slice(11,19)) + '</td></tr>';
+                }).join('') + '</tbody></table>'
+              : '<span class="pm-muted">Son 10 dk içinde forceOrder (likidasyon) olayı yok — piyasa sakin.</span>';
+            var nbHtml = nb.price
+              ? '<b>$' + fmtNum(nb.price,0) + '</b> · <b>' + fmtNum(nb.liq_btc,0) + '</b> BTC · ' + fmtNum(nb.dist_pct,2) + '% · ' + esc(nb.side || '—')
+              : 'Yakın büyük bölge yok';
+            return '<div class="pm-engine"><div class="pm-summary"><div class="cf-kicker">NCE LIQUIDATION HEATMAP</div><h3>TAHMİNİ LİKİDASYON YOĞUNLUĞU</h3><p>Binance Futures BTCUSDT · model: 7G entry volume profili × kaldıraç dağılımı · canlı forceOrder akışı ile doğrulanır. <b>TAHMİNDİR — gerçek pozisyon verisi değildir.</b></p><div class="pm-legend"><span>Mark: <b>$' + fmtNum(mark,1) + '</b></span><span>OI: <b>' + fmtNum(hm.oi_btc,0) + '</b> BTC ($' + fmtNum(hm.oi_usd,0) + ')</span><span>Funding: <b>' + fmtNum(hm.funding_pct,3) + '%</b></span><span>Long: <b>' + fmtNum(hm.long_share != null ? hm.long_share*100 : 0,1) + '%</b></span><span>Short: <b>' + fmtNum(hm.short_share != null ? hm.short_share*100 : 0,1) + '%</b></span></div></div><div class="term-grid">' + card('🎯 En Yakın Büyük Likidasyon Bölgesi', nbHtml) + card('📐 Model Varsayımları', 'Entry penceresi: <b>' + esc(model.entry_window || '7d_1h') + '</b><br>Bin: <b>$' + fmtNum(model.bin_usd || 100,0) + '</b><br>Kaldıraç dağılımı: <b>' + levStr + '</b><br>Maint margin: <b>' + fmtNum(model.maint_margin || 0.005,3) + '</b><br>LS hesap oranı: <b>' + fmtNum(hm.ls_account,3) + '</b> · Top trader pozisyon: <b>' + fmtNum(hm.top_pos_ratio,3) + '</b>') + '</div><div class="pm-targets-wrap"><h3>HEATMAP (en yoğun 45 seviye · <span style="color:#f85149">■</span> max <span style="color:#d29922">■</span> orta <span style="color:#9e6a03">■</span> düşük)</h3>' + liqBars(top, mark) + '</div><div class="term-grid">' + card('🏔️ En Büyük Likidasyon Bölgeleri (Top 10)', peakRows) + card('⚡ Canlı Likidasyon Olayları (forceOrder)', liqRows) + '</div></div>';
           }
           function bigRows(list) {
             return (list || []).slice(0, 20).map(function(x){
@@ -1194,7 +1237,7 @@
             : '<span class="pm-muted">Uç nokta verisi yok.</span>';
           var lastUpdate = ob.time_utc ? ob.time_utc.slice(11,19) + ' UTC' : new Date().toISOString().slice(11,19) + ' UTC';
           var bookAge = ob.data_health && ob.data_health.book_age_s != null ? fmtNum(ob.data_health.book_age_s,1) + 's' : '—';
-          return '<div class="pm-engine"><div class="pm-summary"><div class="cf-kicker">NCE CANLI ORDER BOOK</div><h3>LIVE BID/ASK LIKIDITE</h3><p>Binance Futures BTCUSDT · 1000 seviye tam kitap · <b>her 1 sn tazelenir</b> · Coinglass benzeri canlı görünüm.</p><div class="pm-legend"><span>Status: <b>' + esc(ob.status || 'UNKNOWN') + '</b></span><span>Kitap yaşı: <b>' + bookAge + '</b></span><span>Son güncelleme: <b>' + lastUpdate + '</b></span><span>Fiyat: <b>$' + fmtNum(ob.price,1) + '</b></span><span>Spread: <b>' + fmtNum(ob.spread_bps,2) + ' bps</b></span></div></div><div class="term-grid">' + card('📊 Bid/Ask Dengesi', shareBar() + '<br><b class="' + verdictCls + '">' + esc(verdict) + '</b><br>Bid toplam: <b>' + fmtNum(ob.bid_total_btc,1) + '</b> BTC (' + fmtNum(ob.bid_count||0,0) + ' seviye) · $' + fmtNum(ob.bid_notional_usd,0) + '<br>Ask toplam: <b>' + fmtNum(ob.ask_total_btc,1) + '</b> BTC (' + fmtNum(ob.ask_count||0,0) + ' seviye) · $' + fmtNum(ob.ask_notional_usd,0)) + card('👀 Büyük Emirler (≥15 BTC / ≥$1M)', bigHtml) + card('🔭 Uç Noktalar — uzak büyük emirler', extHtml) + card('💡 Niyet Açıklaması', '<b>SPOOF_SUSPECT</b>: emir görünüp kayboluyor, trade eşleşmesi yok → aldatma şüphesi.<br><b>LIKIDITE_ZONE</b>: kalıcı büyük emir, trade akışıyla destekleniyor → gerçek likidite bölgesi potansiyeli.<br><b>UNCONFIRMED</b>: henüz yeterli kanıt yok.') + '</div><div class="pm-targets-wrap"><h3>DATA HEALTH</h3><table class="pm-targets"><thead><tr><th>Metrik</th><th>Değer</th></tr></thead><tbody><tr><td>WS bağlantısı</td><td>' + (ob.data_health && ob.data_health.ws_connected ? '✅ CONNECTED' : '❌ DISCONNECTED') + '</td></tr><tr><td>Kitap yaşı</td><td>' + bookAge + '</td></tr><tr><td>REST resync</td><td>' + fmtNum((ob.data_health||{}).resync_count||0,0) + '</td></tr><tr><td>Seq gap</td><td>' + fmtNum((ob.data_health||{}).seq_gap_count||0,0) + '</td></tr></tbody></table></div></div>';
+          return heatmapHtml() + '<div class="pm-engine"><div class="pm-summary"><div class="cf-kicker">NCE CANLI ORDER BOOK</div><h3>LIVE BID/ASK LIKIDITE</h3><p>Binance Futures BTCUSDT · 1000 seviye tam kitap · <b>her 1 sn tazelenir</b> · Coinglass benzeri canlı görünüm.</p><div class="pm-legend"><span>Status: <b>' + esc(ob.status || 'UNKNOWN') + '</b></span><span>Kitap yaşı: <b>' + bookAge + '</b></span><span>Son güncelleme: <b>' + lastUpdate + '</b></span><span>Fiyat: <b>$' + fmtNum(ob.price,1) + '</b></span><span>Spread: <b>' + fmtNum(ob.spread_bps,2) + ' bps</b></span></div></div><div class="term-grid">' + card('📊 Bid/Ask Dengesi', shareBar() + '<br><b class="' + verdictCls + '">' + esc(verdict) + '</b><br>Bid toplam: <b>' + fmtNum(ob.bid_total_btc,1) + '</b> BTC (' + fmtNum(ob.bid_count||0,0) + ' seviye) · $' + fmtNum(ob.bid_notional_usd,0) + '<br>Ask toplam: <b>' + fmtNum(ob.ask_total_btc,1) + '</b> BTC (' + fmtNum(ob.ask_count||0,0) + ' seviye) · $' + fmtNum(ob.ask_notional_usd,0)) + card('👀 Büyük Emirler (≥15 BTC / ≥$1M)', bigHtml) + card('🔭 Uç Noktalar — uzak büyük emirler', extHtml) + card('💡 Niyet Açıklaması', '<b>SPOOF_SUSPECT</b>: emir görünüp kayboluyor, trade eşleşmesi yok → aldatma şüphesi.<br><b>LIKIDITE_ZONE</b>: kalıcı büyük emir, trade akışıyla destekleniyor → gerçek likidite bölgesi potansiyeli.<br><b>UNCONFIRMED</b>: henüz yeterli kanıt yok.') + '</div><div class="pm-targets-wrap"><h3>DATA HEALTH</h3><table class="pm-targets"><thead><tr><th>Metrik</th><th>Değer</th></tr></thead><tbody><tr><td>WS bağlantısı</td><td>' + (ob.data_health && ob.data_health.ws_connected ? '✅ CONNECTED' : '❌ DISCONNECTED') + '</td></tr><tr><td>Kitap yaşı</td><td>' + bookAge + '</td></tr><tr><td>REST resync</td><td>' + fmtNum((ob.data_health||{}).resync_count||0,0) + '</td></tr><tr><td>Seq gap</td><td>' + fmtNum((ob.data_health||{}).seq_gap_count||0,0) + '</td></tr></tbody></table></div></div>';
         }
 
         function terminalView(name, j) {
@@ -1348,7 +1391,14 @@
             'Olasılık Haritası': function() { return apiGet('/api/v1/probability-map/summary?tf=' + encodeURIComponent(tf) + '&market=' + encodeURIComponent(probabilityMapMarket)); },
             'Order Flow': function() { return apiGet('/api/v1/orderflow/state?tf=' + encodeURIComponent(tf)); },
             'Money Flow': function() { return loadMoneyFlowLocal(tf); },
-            'Likidite ve Liquidation Haritası': function() { return apiGet('/api/v1/orderbook/live'); },
+            'Likidite ve Liquidation Haritası': function() {
+              return Promise.all([
+                apiGet('/api/v1/orderbook/live'),
+                apiGet('/api/v1/liquidation/heatmap')
+              ]).then(function(r){
+                return { orderbook: r[0] || {}, heatmap: r[1] || {} };
+              });
+            },
             'Options': function() { return apiGet('/api/v1/derivatives/context?tf=' + encodeURIComponent(tf)); },
             'Volume/Market Profile': function() { return Promise.all([apiGet('/api/v1/profile/state?tf=' + encodeURIComponent(tf)), apiGet('/api/v1/vwap/state?tf=' + encodeURIComponent(tf)), apiGet('/api/v1/sessions/state?tf=' + encodeURIComponent(tf))]).then(function(a){ return { status: a[0].status, time_utc: a[0].time_utc, symbol: a[0].symbol, timeframe: a[0].timeframe, volume_profile: a[0], vwap: a[1], sessions: a[2] }; }); },
             'Smart Money': function() { return loadSmartMoneyLocal(tf); },
