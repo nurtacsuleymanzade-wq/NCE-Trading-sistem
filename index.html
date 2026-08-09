@@ -1168,9 +1168,33 @@
         }
 
         function liquidityMapView(j) {
-          var liq=j.liquidity||{}, levels=liq.levels||[], health=j.dataHealth||[];
-          var rows=levels.slice(0,100).map(function(x){ return '<tr><td>'+esc(x.side||'—')+'</td><td>$'+fmtNum(x.price,2)+'</td><td>'+pmMoney(x.displayed_liquidity)+'</td><td>'+pmMoney(x.executed_liquidity)+'</td><td>'+pmMoney(x.cancelled_liquidity)+'</td><td>'+pmMoney(x.replenished_liquidity)+'</td><td>'+esc(x.classification||'UNCONFIRMED')+'</td></tr>'; }).join('');
-          return '<div class="pm-engine"><div class="pm-summary"><div class="cf-kicker">NCE LIQUIDITY MAP</div><h3>RESTING LIQUIDITY LEVELS</h3><p>'+(levels.length?'Gerçek order-book likidite səviyyələri göstərilir.':'Likidite feed-i hazırda mövcud deyil; süni sıfır dəyərlər göstərilmir.')+'</p><div class="pm-legend"><span>Status: '+esc(j.status||'UNAVAILABLE')+'</span><span>Market: '+esc(j.market||'FUTURES')+'</span><span>Levels: '+levels.length+'</span></div></div><div class="pm-targets-wrap"><table class="pm-targets"><thead><tr><th>Side</th><th>Price</th><th>Displayed</th><th>Executed</th><th>Cancelled</th><th>Replenished</th><th>Classification</th></tr></thead><tbody>'+(rows||'<tr><td colspan="7" class="pm-muted">UNAVAILABLE — verified order-book data not returned.</td></tr>')+'</tbody></table></div><div class="pm-targets-wrap"><h3>DATA HEALTH</h3><table class="pm-targets"><thead><tr><th>Source</th><th>Status</th><th>Coverage</th><th>Confidence</th><th>Reason</th></tr></thead><tbody>'+health.map(function(x){return '<tr><td>'+esc(x.source)+'</td><td>'+esc(x.status||'UNAVAILABLE')+'</td><td>'+fmtNum((x.coverage||0)*100,0)+'%</td><td>'+fmtNum(x.confidence,0)+'</td><td>'+esc(x.reason||'—')+'</td></tr>';}).join('')+'</tbody></table></div></div>';
+          var ob = j || {}, verdict = ob.verdict || 'UNKNOWN';
+          var verdictCls = verdict === 'BID_DOMINANT' ? 'backend-ok' : (verdict === 'ASK_DOMINANT' ? 'backend-bad' : 'backend-warn');
+          var bidShare = ob.bid_share_pct != null ? +ob.bid_share_pct : null, askShare = ob.ask_share_pct != null ? +ob.ask_share_pct : null;
+          function shareBar() {
+            if (bidShare == null || askShare == null) return '<span class="pm-muted">Denge verisi yok</span>';
+            return '<div style="display:flex;align-items:center;gap:6px;font-size:12px"><span style="color:#3fb950;min-width:44px">🟢 Bid ' + fmtNum(bidShare,1) + '%</span><div style="flex:1;height:14px;background:#161b22;border-radius:4px;overflow:hidden;display:flex"><div style="width:' + bidShare + '%;background:#238636"></div><div style="width:' + askShare + '%;background:#da3633"></div></div><span style="color:#f85149;min-width:44px;text-align:right">Ask ' + fmtNum(askShare,1) + '%</span></div>';
+          }
+          function bigRows(list) {
+            return (list || []).slice(0, 20).map(function(x){
+              var v = x.verdict || 'UNCONFIRMED';
+              var cls = v === 'LIKIDITE_ZONE' ? 'backend-ok' : (v === 'SPOOF_SUSPECT' ? 'backend-bad' : 'backend-warn');
+              var sideIcon = x.side === 'ask' ? '🔴' : '🟢';
+              return '<tr><td>' + sideIcon + ' ' + esc(x.side || '—').toUpperCase() + '</td><td>$' + fmtNum(x.price,1) + '</td><td><b>' + fmtNum(x.qty_btc,2) + '</b> BTC</td><td>$' + fmtNum(x.notional_usd,0) + '</td><td>' + fmtNum(x.distance_bps,1) + ' bps</td><td>' + fmtNum(x.age_s != null ? x.age_s : 0,0) + 's</td><td>±' + fmtNum(x.appearances || 0,0) + '</td><td class="' + cls + '"><b>' + esc(v) + '</b></td></tr>';
+            }).join('');
+          }
+          var bigHtml = (ob.big_orders || []).length
+            ? '<table class="pm-targets"><thead><tr><th>Side</th><th>Fiyat</th><th>Qty</th><th>Notional</th><th>Dist</th><th>Yaş</th><th>Görünme</th><th>Niyet</th></tr></thead><tbody>' + bigRows(ob.big_orders) + '</tbody></table>'
+            : '<span class="pm-muted">Şu an eşik üstü büyük emir yok (eşik: ≥15 BTC veya ≥$1M notional).</span>';
+          var extHtml = (ob.extremes || []).length
+            ? '<table class="pm-targets"><thead><tr><th>Side</th><th>Fiyat</th><th>Qty</th><th>Notional</th><th>Dist</th><th>Yaş</th><th>Niyet</th></tr></thead><tbody>' + (ob.extremes || []).slice(0,10).map(function(x){
+                var v = x.verdict || 'UNCONFIRMED';
+                return '<tr><td>' + (x.side === 'ask' ? '🔴' : '🟢') + ' ' + esc(x.side || '—').toUpperCase() + '</td><td>$' + fmtNum(x.price,1) + '</td><td><b>' + fmtNum(x.qty_btc,2) + '</b> BTC</td><td>$' + fmtNum(x.notional_usd,0) + '</td><td>' + fmtNum(x.distance_bps,1) + ' bps</td><td>' + fmtNum(x.age_s != null ? x.age_s : 0,0) + 's</td><td class="' + (v === 'SPOOF_SUSPECT' ? 'backend-bad' : 'backend-ok') + '"><b>' + esc(v) + '</b></td></tr>';
+              }).join('') + '</tbody></table>'
+            : '<span class="pm-muted">Uç nokta verisi yok.</span>';
+          var lastUpdate = ob.time_utc ? ob.time_utc.slice(11,19) + ' UTC' : new Date().toISOString().slice(11,19) + ' UTC';
+          var bookAge = ob.data_health && ob.data_health.book_age_s != null ? fmtNum(ob.data_health.book_age_s,1) + 's' : '—';
+          return '<div class="pm-engine"><div class="pm-summary"><div class="cf-kicker">NCE CANLI ORDER BOOK</div><h3>LIVE BID/ASK LIKIDITE</h3><p>Binance Futures BTCUSDT · 1000 seviye tam kitap · <b>her 1 sn tazelenir</b> · Coinglass benzeri canlı görünüm.</p><div class="pm-legend"><span>Status: <b>' + esc(ob.status || 'UNKNOWN') + '</b></span><span>Kitap yaşı: <b>' + bookAge + '</b></span><span>Son güncelleme: <b>' + lastUpdate + '</b></span><span>Fiyat: <b>$' + fmtNum(ob.price,1) + '</b></span><span>Spread: <b>' + fmtNum(ob.spread_bps,2) + ' bps</b></span></div></div><div class="term-grid">' + card('📊 Bid/Ask Dengesi', shareBar() + '<br><b class="' + verdictCls + '">' + esc(verdict) + '</b><br>Bid toplam: <b>' + fmtNum(ob.bid_total_btc,1) + '</b> BTC (' + fmtNum(ob.bid_count||0,0) + ' seviye) · $' + fmtNum(ob.bid_notional_usd,0) + '<br>Ask toplam: <b>' + fmtNum(ob.ask_total_btc,1) + '</b> BTC (' + fmtNum(ob.ask_count||0,0) + ' seviye) · $' + fmtNum(ob.ask_notional_usd,0)) + card('👀 Büyük Emirler (≥15 BTC / ≥$1M)', bigHtml) + card('🔭 Uç Noktalar — uzak büyük emirler', extHtml) + card('💡 Niyet Açıklaması', '<b>SPOOF_SUSPECT</b>: emir görünüp kayboluyor, trade eşleşmesi yok → aldatma şüphesi.<br><b>LIKIDITE_ZONE</b>: kalıcı büyük emir, trade akışıyla destekleniyor → gerçek likidite bölgesi potansiyeli.<br><b>UNCONFIRMED</b>: henüz yeterli kanıt yok.') + '</div><div class="pm-targets-wrap"><h3>DATA HEALTH</h3><table class="pm-targets"><thead><tr><th>Metrik</th><th>Değer</th></tr></thead><tbody><tr><td>WS bağlantısı</td><td>' + (ob.data_health && ob.data_health.ws_connected ? '✅ CONNECTED' : '❌ DISCONNECTED') + '</td></tr><tr><td>Kitap yaşı</td><td>' + bookAge + '</td></tr><tr><td>REST resync</td><td>' + fmtNum((ob.data_health||{}).resync_count||0,0) + '</td></tr><tr><td>Seq gap</td><td>' + fmtNum((ob.data_health||{}).seq_gap_count||0,0) + '</td></tr></tbody></table></div></div>';
         }
 
         function terminalView(name, j) {
@@ -1324,7 +1348,7 @@
             'Olasılık Haritası': function() { return apiGet('/api/v1/probability-map/summary?tf=' + encodeURIComponent(tf) + '&market=' + encodeURIComponent(probabilityMapMarket)); },
             'Order Flow': function() { return apiGet('/api/v1/orderflow/state?tf=' + encodeURIComponent(tf)); },
             'Money Flow': function() { return loadMoneyFlowLocal(tf); },
-            'Likidite ve Liquidation Haritası': function() { return apiGet('/api/v1/probability-map/liquidity?tf=' + encodeURIComponent(tf) + '&market=' + encodeURIComponent(probabilityMapMarket)); },
+            'Likidite ve Liquidation Haritası': function() { return apiGet('/api/v1/orderbook/live'); },
             'Options': function() { return apiGet('/api/v1/derivatives/context?tf=' + encodeURIComponent(tf)); },
             'Volume/Market Profile': function() { return Promise.all([apiGet('/api/v1/profile/state?tf=' + encodeURIComponent(tf)), apiGet('/api/v1/vwap/state?tf=' + encodeURIComponent(tf)), apiGet('/api/v1/sessions/state?tf=' + encodeURIComponent(tf))]).then(function(a){ return { status: a[0].status, time_utc: a[0].time_utc, symbol: a[0].symbol, timeframe: a[0].timeframe, volume_profile: a[0], vwap: a[1], sessions: a[2] }; }); },
             'Smart Money': function() { return loadSmartMoneyLocal(tf); },
@@ -1345,6 +1369,9 @@
               var content = document.getElementById('panel-content'); if (content) content.innerHTML = terminalView(name, j);
               if (name === 'Long/Short Skoru' && panelRequestSeq === activePanelRequestSeq) {
                 decisionRefreshTimer = setTimeout(function(){ if (panelFromUrl() === name) setTab(name, true); }, curTF === '1s' ? 3000 : 15000);
+              }
+              if (name === 'Likidite ve Liquidation Haritası' && panelRequestSeq === activePanelRequestSeq) {
+                decisionRefreshTimer = setTimeout(function(){ if (panelFromUrl() === name) setTab(name, true); }, 2000);
               }
             }).catch(function(e){
               if (panelRequestSeq !== activePanelRequestSeq || activePanelName !== name || curTF !== tf) { console.warn('NCE stale error ignored', {panel:name, timeframe:tf, requestSequence:panelRequestSeq}); return; }
