@@ -250,13 +250,18 @@ class CapitalFlowStore:
         }
 
     def trades(self, market: str, symbol: str = "BTCUSDT", since_ms: int | None = None, limit: int = 100000) -> list[AggTrade]:
-        table = "spot_aggtrades_raw" if market == "spot" else "futures_aggtrades_raw"
-        where = "WHERE symbol = ?" + (" AND timestamp_ms >= ?" if since_ms else "")
+        table = "futures_aggtrades_raw" if market == "futures" else "spot_aggtrades_raw"
+        where = "WHERE symbol = ?"
         params: list[Any] = [symbol]
-        if since_ms:
+        if since_ms is not None:
+            where += " AND timestamp_ms >= ?"
             params.append(since_ms)
+        # DESC + reverse so callers receive the most recent `limit` rows in
+        # chronological order.  ASC + LIMIT previously returned the OLDEST
+        # `limit` rows, which made trades[-1] hours/days stale.
         params.append(limit)
-        rows = self.conn.execute(f"SELECT * FROM {table} {where} ORDER BY timestamp_ms, aggregate_trade_id LIMIT ?", params).fetchall()
+        rows = self.conn.execute(f"SELECT * FROM {table} {where} ORDER BY timestamp_ms DESC, aggregate_trade_id DESC LIMIT ?", params).fetchall()
+        rows.reverse()
         return [AggTrade(market, row["symbol"], row["timestamp_ms"], row["aggregate_trade_id"], row["price"], row["quantity_btc"], row["notional_usd"], bool(row["buyer_is_maker"]), row["aggressor_side"]) for row in rows]
 
     def latest(self, table: str, symbol: str = "BTCUSDT", market: str = "spot") -> dict[str, Any] | None:

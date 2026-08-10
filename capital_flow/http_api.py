@@ -21,6 +21,7 @@ from .probability_map import (
     liquidation_zones,
     volume_profile,
 )
+from .liquidity_probability_v2 import build_v2_decision
 
 
 TF_SECONDS = {"1s": 1, "5s": 5, "15s": 15, "30s": 30, "1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "24h": 86400}
@@ -128,6 +129,18 @@ def create_router(db_path: str | None = None):
     historical_path = Path(os.environ.get("NCE_CAPITAL_FLOW_HISTORICAL_SUMMARY", str(local_historical_path if local_historical_path.exists() else "/var/lib/nce-trading/capital_flow/historical/validation_summary.json")))
     local_probability_calibration = Path(__file__).resolve().parent.parent / "historical" / "calibration" / "target_probability.json"
     probability_calibration_path = Path(os.environ.get("NCE_PROBABILITY_MAP_CALIBRATION", str(local_probability_calibration if local_probability_calibration.exists() else historical_path.parent / "calibration" / "target_probability.json")))
+    local_v2_model_path = Path(__file__).resolve().parent.parent / "historical" / "calibration" / "liquidity_probability_v2.json"
+    v2_model_path = Path(os.environ.get("NCE_LIQUIDITY_PROBABILITY_V2_MODEL", str(local_v2_model_path)))
+
+    def load_v2_model() -> dict[str, Any] | None:
+        """Load only an explicitly versioned V2 artifact; V1 calibration is not reusable."""
+        if not v2_model_path.exists():
+            return None
+        try:
+            value = json.loads(v2_model_path.read_text())
+            return value if isinstance(value, dict) and value.get("engine_version") == "v2" else None
+        except (OSError, ValueError, TypeError):
+            return None
 
     def external_context() -> dict[str, Any]:
         if not context_path.exists():
@@ -158,7 +171,9 @@ def create_router(db_path: str | None = None):
         try:
             engine = load_engine(database, symbol, tf)
             state = engine.snapshot(TF_SECONDS[tf])
-            trades = list(engine.futures_trades or engine.spot_trades)
+            # Keep the selected market isolated.  Futures and spot executions
+            # must never be silently merged into the decision engine.
+            trades = list(engine.futures_trades if market.lower() == "futures" else engine.spot_trades)
             latest_book = store.latest("orderbook_raw", symbol, market)
             book = (latest_book or {}).get("payload") or {}
             mid = None
@@ -183,6 +198,13 @@ def create_router(db_path: str | None = None):
             flow = {"futures_cvd": flow_value.get("cvd"), "spot_cvd": ((state.get("spot") or {}).get("value") or {}).get("cvd"), "delta": flow_value.get("delta_usd"), "price_velocity": flow_value.get("price_change")}
             positioning = {"OI": oi_value.get("value"), "delta_OI": oi_value.get("delta"), "funding": funding_value.get("rate")}
             candidates = __import__("capital_flow.probability_map", fromlist=["generate_candidates"]).generate_candidates(current_price, liquidation=liq_zones, liquidity=liquidity.get("levels", []), profile=profile, atr=atr)
+            # Slim: V2 path_analysis is O(candidates × liquidity_levels).  Every
+            # order-book level becomes a candidate, which ballooned to ~1100 rows
+            # and ~48s per request.  Keep the strongest exposures (both sides)
+            # and re-sort by price for stable UI ordering.
+            if len(candidates) > 80:
+                candidates.sort(key=lambda c: float(c.get("estimatedNotional") or 0.0), reverse=True)
+                candidates = sorted(candidates[:80], key=lambda c: float(c.get("targetCenter") or 0.0))
             calibration_rows = {60: store.calibration(symbol, 60), 15: store.calibration(symbol, 15), 30: store.calibration(symbol, 30), 240: store.calibration(symbol, 240)}
             if probability_calibration_path.exists() and not any(calibration_rows.values()):
                 try:
@@ -198,6 +220,29 @@ def create_router(db_path: str | None = None):
                 target["targetCenter"] = round(target["targetCenter"], 2)
                 target["targetLow"] = round(target["targetLow"], 2)
                 target["targetHigh"] = round(target["targetHigh"], 2)
+            latest_oi = store.latest("oi_raw", symbol)
+            latest_funding = store.latest("funding_raw", symbol)
+            latest_force_order = store.conn.execute("SELECT MAX(timestamp_ms) FROM liquidations_raw WHERE symbol = ?", (symbol,)).fetchone()[0]
+            v2_decision = build_v2_decision(
+                current_price=current_price,
+                atr=atr,
+                candidates=candidates,
+                liquidity_levels=liquidity.get("levels", []),
+                liquidation_zones=liq_zones,
+                profile=profile,
+                book=book,
+                trades=trades,
+                now_ms=int(time.time() * 1000),
+                input_timestamps={
+                    "Trades": trades[-1].timestamp if trades else None,
+                    "Orderbook": latest_book.get("timestamp_ms") if latest_book else None,
+                    "OI": latest_oi.get("timestamp_ms") if latest_oi else None,
+                    "Funding": latest_funding.get("timestamp_ms") if latest_funding else None,
+                    "ForceOrder": latest_force_order,
+                    "Liquidation model": latest_oi.get("timestamp_ms") if latest_oi else None,
+                },
+                model_artifact=load_v2_model(),
+            )
             health = probability_data_health({
                 "Orderbook": {"status": "REAL" if events or snapshots else "UNAVAILABLE", "coverage": 1.0 if events or snapshots else 0.0, "confidence": 98 if events else None, "reason": None if events else "no orderbook lifecycle archive"},
                 "AggTrades": {"status": "REAL" if trades else "UNAVAILABLE", "coverage": 1.0 if trades else 0.0, "confidence": 98 if trades else None},
@@ -207,11 +252,29 @@ def create_router(db_path: str | None = None):
                 "Historical Model": {"status": "CALIBRATED" if any(calibration_rows.values()) else "UNAVAILABLE", "coverage": 1.0 if any(calibration_rows.values()) else 0.0, "confidence": None if not any(calibration_rows.values()) else 60},
             })
             primary = targets[0] if targets else None
+            v2_primary = v2_decision.get("primaryTarget")
+            # Production consumers receive V2 only.  The previous V1 score and
+            # score-to-rate mapping remains available under explicit legacy
+            # names for migration/audit, never as current decision output.
+            public_primary = dict(v2_primary or {})
             direction_word = "aşağıdaki" if primary and primary.get("direction") == "DOWN" else "yukarıdaki"
             summary_text = (f"BTC mevcut durumda {direction_word} {primary['targetCenter']:,.2f} bölgesine yönelen en erişilebilir aday olarak görünüyor; " + "kalibre edilmiş hedef olasılığı mevcut değil." if primary and primary.get("status") != "CALIBRATED" else f"BTC için birincil hedef {primary['targetCenter']:,.2f} bölgesi." if primary else "Yeterli gerçek piyasa verisiyle aday hedef üretilemedi.")
+            # Keep the V1 fields for existing consumers, while exposing the
+            # complete V2 Hova contract additively.  V1 schemaVersion stays
+            # stable to avoid breaking existing terminals.
             return {
                 "status": "PASS" if current_price else "UNAVAILABLE", "schemaVersion": "probability-map-v1", "time_utc": _now(), "timestamp": int(time.time() * 1000), "symbol": symbol, "timeframe": tf, "market": market.upper(), "currentPrice": current_price, "atr": atr,
-                "summary": summary_text, "primaryTarget": primary, "targets": targets, "liquidity": liquidity, "liquidations": {"status": "ESTIMATED" if liq_zones else "UNAVAILABLE", "zones": liq_zones, "observed": liq_actual, "methodology": "OI cohorts and leverage prior; not all account liquidation prices are public"}, "volumeProfile": profile, "flow": flow, "positioning": positioning, "dataHealth": health, "rules": {"scoreIsProbability": False, "probabilityStatus": "CALIBRATED" if any(calibration_rows.values()) else "UNAVAILABLE", "liquidationStatus": "ESTIMATED"}, "tradeContract": "Research/ranking output only; no automatic execution, entry, stop or RR authorization.",
+                "summary": summary_text, "primaryTarget": public_primary, "targets": v2_decision.get("targets", []), "legacyPrimaryTarget": primary, "legacyTargets": targets, "liquidity": liquidity, "liquidations": {"status": "ESTIMATED" if liq_zones else "UNAVAILABLE", "zones": liq_zones, "observed": liq_actual, "methodology": "OI cohorts and leverage prior; not all account liquidation prices are public"}, "volumeProfile": profile, "flow": flow, "positioning": positioning, "dataHealth": health, "rules": {"scoreIsProbability": False, "probabilityStatus": "CALIBRATED" if any(calibration_rows.values()) else "UNAVAILABLE", "v2ProbabilityStatus": v2_decision.get("modelHealth", {}).get("status"), "liquidationStatus": "ESTIMATED"}, "tradeContract": "Research/ranking output only; no automatic execution, entry, stop or RR authorization.",
+                "v2": v2_decision,
+                "hova": v2_decision,
+                "marketState": v2_decision.get("marketState", {}),
+                "direction": v2_decision.get("direction", {}),
+                "path": v2_decision.get("path", []),
+                "alternativeTargets": v2_decision.get("alternativeTargets", []),
+                "largestPool": v2_decision.get("largestPool", {}),
+                "modelHealth": v2_decision.get("modelHealth", {}),
+                "decisionStatus": v2_decision.get("status"),
+                "dataHealthV2": v2_decision.get("dataHealth", []),
             }
         finally:
             store.close()
