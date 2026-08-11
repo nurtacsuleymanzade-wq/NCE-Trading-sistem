@@ -554,7 +554,7 @@
           var started = Date.now();
           var fetchOptions = Object.assign({}, options);
           delete fetchOptions.requestSeq; delete fetchOptions.timeframe; delete fetchOptions.symbol;
-          return fetch(full, Object.assign({ signal: AbortSignal.timeout(20000) }, fetchOptions)).then(function(r) {
+          return fetch(full, Object.assign({ signal: AbortSignal.timeout(60000) }, fetchOptions)).then(function(r) {
             return r.clone().text().then(function(raw) {
               var body = raw; try { body = raw ? JSON.parse(raw) : null; } catch (_) {}
               console.debug('NCE API response', {url: full, httpStatus: r.status, responseBody: body, timeframe: tf, symbol: symbol, requestSequence: requestSeq, elapsedMs: Date.now()-started});
@@ -1505,7 +1505,7 @@
             '<section class="liq-section"><div class="liq-section-head"><div><h4>Data health</h4><p>Texniki statusun istifadəçi dilində izahı.</p></div></div><div class="liq-health-grid"><div class="liq-health-item"><span>Order book</span><strong>' + (String(ob.status || '').toUpperCase() === 'LIVE' ? '● CONNECTED' : '○ MƏHDUD') + '<br>' + ageLabel(bookAge) + '</strong></div><div class="liq-health-item"><span>Liquidation model</span><strong>' + (String(hm.status || '').toUpperCase() === 'LIVE' ? '● AKTİV' : '○ MÖVCUD DEYİL') + '<br>' + ageLabel(liqAge) + '</strong></div><div class="liq-health-item"><span>Seq gap</span><strong>' + f(dh.seq_gap_count,0) + '<br>' + (n(dh.seq_gap_count) === 0 ? 'Problem görünmür' : 'Yoxlama tələb edir') + '</strong></div><div class="liq-health-item"><span>REST resync</span><strong>' + f(dh.resync_count,0) + '<br>Texniki yenidən sinxronizasiya</strong></div><div class="liq-health-item"><span>Trade təsdiqi</span><strong>' + (trades5m === 0 ? 'Yoxdur' : f(trades5m,0) + ' trade') + '<br>' + (trades5m === 0 ? 'UNCONFIRMED normaldır' : 'Niyyət yoxlanmalıdır') + '</strong></div></div></section>' + methodology + '</div>';
         }
 
-        var liqAutoRefresh = true, liqRefreshMs = 1000, liqLastFetchAt = 0, liqSnapshotBusy = false;
+        var liqAutoRefresh = true, liqRefreshMs = 5000, liqLastFetchAt = 0, liqSnapshotBusy = false;
         function refreshLiquidationPanel() { if (typeof panelFromUrl === 'function' && panelFromUrl() === 'Likidite ve Liquidation Haritası') setTab('Likidite ve Liquidation Haritası', true); }
         function toggleLiqAutoRefresh(button) { liqAutoRefresh = !liqAutoRefresh; if (button) button.textContent = liqAutoRefresh ? '⏱ Auto: ' + (liqRefreshMs / 1000) + ' san' : '⏸ Auto: Dayandırılıb'; if (liqAutoRefresh) { liqLastFetchAt = 0; refreshLiquidationPanel(); } }
         function setLiqRefreshRate(value) { var ms = Number(value); if (ms === 1000 || ms === 5000 || ms === 10000 || ms === 30000) liqRefreshMs = ms; liqLastFetchAt = 0; if (liqAutoRefresh) refreshLiquidationPanel(); }
