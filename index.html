@@ -1510,7 +1510,10 @@
         function toggleLiqAutoRefresh(button) { liqAutoRefresh = !liqAutoRefresh; if (button) button.textContent = liqAutoRefresh ? '⏱ Auto: ' + (liqRefreshMs / 1000) + ' san' : '⏸ Auto: Dayandırılıb'; if (liqAutoRefresh) { liqLastFetchAt = 0; refreshLiquidationPanel(); } }
         function setLiqRefreshRate(value) { var ms = Number(value); if (ms === 1000 || ms === 5000 || ms === 10000 || ms === 30000) liqRefreshMs = ms; liqLastFetchAt = 0; if (liqAutoRefresh) refreshLiquidationPanel(); }
         function requestLiquidationSnapshot() {
-          return Promise.all([apiGet('/api/v1/orderbook/live'), apiGet('/api/v1/liquidation/heatmap')]).then(function(r) { return { orderbook:r[0] || {}, heatmap:r[1] || {} }; });
+          return apiGet('/api/v1/probability-map/summary?tf=' + encodeURIComponent(curTF || '1m') + '&market=' + encodeURIComponent(probabilityMapMarket || 'futures')).catch(function(e) {
+            console.warn('V2 probability-map failed, falling back to legacy liquidity snapshot', e && e.message || e);
+            return Promise.all([apiGet('/api/v1/orderbook/live'), apiGet('/api/v1/liquidation/heatmap')]).then(function(r) { return { orderbook:r[0] || {}, heatmap:r[1] || {} }; });
+          });
         }
         function liveLiquidationTick() {
           if (!liqAutoRefresh || liqSnapshotBusy || typeof panelFromUrl !== 'function' || panelFromUrl() !== 'Likidite ve Liquidation Haritası') return;
@@ -1566,6 +1569,7 @@
           } else if (name === 'Long/Short Skoru') {
             return decisionEngineView(j);
           } else if (name === 'Likidite ve Liquidation Haritası') {
+            if (j && j.v2) return probabilityMapView(j);
             return liquidityMapView(j);
           } else if (name === 'Options') {
             html += card('Available derivatives context', listObj(j.context||{}));
