@@ -123,10 +123,13 @@ def test_probability_map_api_contract_is_additive_and_marks_estimates(tmp_path):
     assert payload["rules"]["scoreIsProbability"] is False
     assert payload["liquidations"]["status"] == "ESTIMATED"
     assert payload["rules"]["probabilityStatus"] == "CALIBRATED"
-    calibrated = [target for target in payload["targets"] if target["status"] == "CALIBRATED"]
+    calibrated = [target for target in payload["legacyTargets"] if target["status"] == "CALIBRATED"]
     assert calibrated
     assert all(target["probability"]["hit1h"] is not None for target in calibrated)
     assert any(round(target["attractionScore"] / 100, 6) != round(target["probability"]["hit1h"], 6) for target in calibrated)
+    assert payload["v2"]["modelHealth"]["status"] == "MODEL UNAVAILABLE"
+    assert "marketState" in payload["hova"]
+    assert "largestPool" in payload["hova"]
 
 
 def test_historical_replay_uses_future_only_as_labels():
