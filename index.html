@@ -517,7 +517,7 @@
         const EPS = 1e-9;
         const SYMBOL = 'BTCUSDT';
         const TFs = ['1s', '1m', '5m', '15m', '30m', '1h', '4h', '1D', '3D'];
-        const TERMINAL_TABS = ['Grafik','Trader Hova','Long/Short Skoru','Olasılık Haritası','Order Flow','Money Flow','Likidite ve Liquidation Haritası','Options','Volume/Market Profile','Smart Money','Makro ve Haber','Simülasyon','UMPE Skorları','Historical Replay / Backtest','Data Health','Real Trading / Paper'];
+        const TERMINAL_TABS = ['Grafik','Trader Hova','Long/Short Skoru','Olasılık Haritası','Order Book','Money Flow','Likidite ve Liquidation Haritası','Options','Volume/Market Profile','Smart Money','Makro ve Haber','Simülasyon','UMPE Skorları','Historical Replay / Backtest','Data Health','Real Trading / Paper'];
         var VOLUME_UNIT = 'QUOTE_ASSET'; // Default, may be updated by server
         var SYMBOL_CAP = 'BTC';
         // Globals
@@ -1389,6 +1389,22 @@
 
         /* Decision-first liquidation map. The model remains explicitly estimated;
            observed order-book data is never presented as liquidation probability. */
+        function orderBookView(j) {
+          var sc=j.scenario||{}, ab=j.absorption||{}, health=j.data_health||{}, fb=sc.first_liquidity||{}, ob=sc.other_liquidity||{};
+          var wall=function(w){return w&&w.price ? esc(w.side)+' '+fmtNum(w.price,1)+' · '+fmtNum(w.qty_btc,3)+' BTC · '+fmtNum(w.distance_bps,1)+' bps · '+esc(w.verdict||'') : 'Yok';};
+          var status=(j.status==='LIVE'&&health.ws_connected&&health.book_age_s<5)?'LIVE / VERIFIED FEED':'DATA HEALTH CHECK';
+          var html='<div class="term-grid">';
+          html+=pill('Feed',status,status.indexOf('LIVE')===0);
+          html+=pill('Scenario',sc.verdict||'NO_TRADE',sc.verdict && sc.verdict!=='NO_TRADE');
+          html+=pill('Confidence',fmtNum(sc.confidence_pct,1)+'%',true);
+          html+=pill('Window',fmtNum(j.analysis_window_s,0)+' s',j.analysis_window_s>=30);
+          html+='</div>';
+          html+=card('Nearest validated liquidity','First: <b>'+wall(fb)+'</b><br>Other: <b>'+wall(ob)+'</b><br>RR estimate: <b>'+fmtNum(sc.rr_estimate,2)+'</b><br>Manipulation watch: <b>'+esc(String(sc.manipulation_watch||false))+'</b><br>First-taken logic: nearest distance first, then dynamic notional; spoofed walls excluded.');
+          html+=card('Spoof / wall validity','The engine tracks persistence, disappearances without nearby trades, quantity flip-flops and reappearance. HIGH spoof is excluded from the first-liquidity scenario.<br><br>'+((j.big_orders||[]).slice(0,8).map(function(w){return esc(w.side)+' @ '+fmtNum(w.price,1)+' · '+fmtNum(w.notional_usd,0)+' USD · age '+fmtNum(w.age_s,1)+'s · spoof '+esc(w.spoof_score)+' · '+esc(w.verdict);}).join('<br>')||'No qualified wall yet'),'backend-warn');
+          html+=card('Absorption / effort vs result',listObj(ab),'backend-warn');
+          html+=card('Read-only safety','No order endpoint is called. Visible order-book liquidity can be cancelled and is not a guaranteed target. RR<2, insufficient persistence or manipulation risk produces WATCH/NO_TRADE.');
+          html+='</div>'; return html;
+        }
         function liquidityMapView(j) {
           var ob = (j && j.orderbook) || {};
           var hm = (j && j.heatmap) || {};
@@ -1593,8 +1609,8 @@
             return capitalFlowView(j);
           } else if (name === 'Smart Money') {
             html += card('Smart Money Events', (j.events||[]).length ? listObj(j) : 'No smart money events detected.', 'backend-warn');
-          } else if (name === 'Order Flow') {
-            html += card('Order Flow State', listObj(j));
+          } else if (name === 'Order Book') {
+            html += card('Order Book / Liquidity Engine', orderBookView(j));
           } else if (name === 'Data Health') {
             html += card('Data Health', listObj(j));
           } else {
@@ -1680,7 +1696,7 @@
             'Trader Hova': function() { return requestJson('/api/v1/hova/chat', { method: 'POST', requestSeq: panelRequestSeq, timeframe: tf, symbol: SYMBOL, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'terminal_state', timeframe: tf, source: 'website' }) }); },
             'Long/Short Skoru': function() { return fetchRealDecision(tf); },
             'Olasılık Haritası': function() { return apiGet('/api/v1/probability-map/summary?tf=' + encodeURIComponent(tf) + '&market=' + encodeURIComponent(probabilityMapMarket)); },
-            'Order Flow': function() { return apiGet('/api/v1/orderflow/state?tf=' + encodeURIComponent(tf)); },
+            'Order Book': function() { return apiGet('/api/v1/orderbook/live'); },
             'Money Flow': function() { return loadMoneyFlowLocal(tf); },
             'Likidite ve Liquidation Haritası': function() { return requestLiquidationSnapshot(); },
             'Options': function() { return apiGet('/api/v1/derivatives/context?tf=' + encodeURIComponent(tf)); },
@@ -1745,7 +1761,7 @@
         }
         var TAB_GROUPS = [
           { label:'Əsas', items:['Grafik','Likidite ve Liquidation Haritası','Long/Short Skoru','Olasılık Haritası'] },
-          { label:'Axın', items:['Order Flow','Money Flow','Smart Money'] },
+          { label:'Axın', items:['Order Book','Money Flow','Smart Money'] },
           { label:'Derivativlər', items:['Options','Volume/Market Profile','Makro ve Haber'] },
           { label:'Araşdırma', items:['Simülasyon','UMPE Skorları','Historical Replay / Backtest'] },
           { label:'Alətlər', items:['Data Health','Real Trading / Paper','Trader Hova'] }
