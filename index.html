@@ -764,9 +764,9 @@ if (!window.NCELiveFallback) {
       get(FAPI + '/depth?symbol=' + SYMBOL + '&limit=1000'),
       get(FAPI + '/ticker/bookTicker?symbol=' + SYMBOL),
       get(FAPI + '/aggTrades?symbol=' + SYMBOL + '&limit=1000'),
-      get(FAPI + '/markPriceKlines?symbol=' + SYMBOL + '&interval=1m&limit=120'),
-      get(FAPI + '/openInterest?symbol=' + SYMBOL),
-      get(FAPI + '/premiumIndex?symbol=' + SYMBOL),
+      get(FAPI + '/markPriceKlines?symbol=' + SYMBOL + '&interval=1m&limit=120').catch(function () { return []; }),
+      get(FAPI + '/openInterest?symbol=' + SYMBOL).catch(function () { return null; }),
+      get(FAPI + '/premiumIndex?symbol=' + SYMBOL).catch(function () { return {}; }),
       get(FDATA + '/globalLongShortAccountRatio?symbol=' + SYMBOL + '&period=5m&limit=1').catch(function () { return []; })
     ]).then(function (a) {
       var premium = a[5] || {};
@@ -1993,7 +1993,7 @@ if (!window.NCELiveFallback) {
         function refreshLiquidationPanel() { if (typeof panelFromUrl === 'function' && panelFromUrl() === 'Likidite ve Liquidation Haritası') setTab('Likidite ve Liquidation Haritası', true); }
         function toggleLiqAutoRefresh(button) { liqAutoRefresh = !liqAutoRefresh; if (button) button.textContent = liqAutoRefresh ? '⏱ Auto: ' + (liqRefreshMs / 1000) + ' san' : '⏸ Auto: Dayandırılıb'; if (liqAutoRefresh) { liqLastFetchAt = 0; refreshLiquidationPanel(); } }
         function setLiqRefreshRate(value) { var ms = Number(value); if (ms === 1000 || ms === 5000 || ms === 10000 || ms === 30000) liqRefreshMs = ms; liqLastFetchAt = 0; if (liqAutoRefresh) refreshLiquidationPanel(); }
-        function hasLiquidationModelData(j){ var hm=j&&j.heatmap||{}, v=j&&j.v2||{}, p=v.primaryTarget||{}, levels=hm.levels||hm.zones||hm.bands||[]; return !!(p.price || (levels.length && (hm.mark_price||hm.model_mark||hm.current_price))); }
+        function hasLiquidationModelData(j){ var hm=j&&j.heatmap||{}, v=j&&j.v2||{}, p=v.primaryTarget||{}, levels=hm.levels||hm.zones||hm.bands||[], ms=String((v.modelHealth||{}).status||''); return !!((p.price && (ms==='CALIBRATED'||ms==='CALIBRATED_BASELINE')) || (levels.length && (hm.mark_price||hm.model_mark||hm.current_price))); }
         function requestLiquidationSnapshot() {
           return apiGet('/api/v1/probability-map/summary?tf=' + encodeURIComponent(curTF || '1m') + '&market=' + encodeURIComponent(probabilityMapMarket || 'futures')).then(function(j){ var enriched=window.NCELiveFallback.enrichProbabilityResponse(j, curTF || '1m'); return hasLiquidationModelData(enriched) ? enriched : window.NCELiveFallback.buildLiquidationSnapshot(curTF || '1m'); }).catch(function(e) {
             console.warn('V2 probability-map failed, falling back to direct Binance live snapshot', e && e.message || e);
