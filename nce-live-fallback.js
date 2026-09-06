@@ -461,3 +461,45 @@
     enrichProbabilityResponse: enrichProbabilityResponse
   };
 })();
+
+/* Hermes Probability V2 loader.
+ * Kept here so the large legacy index remains cache-stable. The V2 board owns
+ * only the Probability Map panel and refreshes it from independent 1s/1m/5m
+ * states once per second.
+ */
+(function () {
+  'use strict';
+  var busy = false, lastFetch = 0, timer = null;
+  function isProbabilityPanel() {
+    try {
+      var selected = new URLSearchParams(window.location.search).get('panel');
+      return selected === 'Olasılık Haritası' || window.activePanelName === 'Olasılık Haritası';
+    } catch (_) { return false; }
+  }
+  function tick() {
+    if (!isProbabilityPanel() || busy || Date.now() - lastFetch < 1000 || !window.NCEProbabilityBoardV2) return;
+    busy = true;
+    lastFetch = Date.now();
+    var terminal = document.getElementById('terminal');
+    var scrollTop = terminal ? terminal.scrollTop : 0;
+    window.NCEProbabilityBoardV2.build().then(function (payload) {
+      if (!isProbabilityPanel()) return;
+      var content = document.getElementById('panel-content');
+      if (content) content.innerHTML = window.NCEProbabilityBoardV2.render(payload);
+      if (terminal) terminal.scrollTop = scrollTop;
+    }).catch(function (error) {
+      console.warn('Hermes probability V2 refresh failed', error && error.message || error);
+    }).finally(function () { busy = false; });
+  }
+  function start() {
+    if (!timer) timer = setInterval(tick, 250);
+    tick();
+  }
+  var script = document.createElement('script');
+  script.src = 'nce-probability-board-v2.js?v=20260906';
+  script.async = true;
+  script.onload = start;
+  document.head.appendChild(script);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
