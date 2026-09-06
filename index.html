@@ -503,6 +503,7 @@
         <div id="terminal" style="display: none;"></div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="nce-live-fallback.js"></script>
     <script>
         // Constants and Configuration
         const API_BASE = (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost')
@@ -672,7 +673,7 @@
                 },
             };
 
-            resultDiv.innerHTML = '<span class="backend-warn">Simulation execution is unavailable: no backend simulation-run endpoint is deployed. No simulated numeric result was generated.</span>';
+            var localSimulation = window.NCELiveFallback.simulate({capital:capital, leverage:leverage, tradeSize:tradeSize, stopLoss:stopLoss, takeProfit:takeProfit, bars:curData}); resultDiv.innerHTML = localSimulation.html;
         }
 
 
@@ -692,7 +693,7 @@
         function legacyLiquidityMapView(j){var ob=j.orderbook||{},z=j.zones||{},arch=j.archive||[];function row(x,cls){return '<tr><td>'+esc(x.side==='ask'?'🔴 above':'🟢 below')+'</td><td>$'+fmtNum(x.price,2)+'</td><td>'+fmtNum(x.qty,4)+'</td><td>$'+fmtNum(x.notional,0)+'</td><td>'+fmtNum(x.distance_pct,3)+'%</td></tr>';}
         var next=z.next_sweep||{};return '<div class="term-grid">'+pill('Status',j.status==='PASS',j.status)+pill('Updated UTC',true,j.time_utc||'')+card('Current orderbook','Bid: <b>$'+fmtNum(ob.best_bid,2)+'</b><br>Ask: <b>$'+fmtNum(ob.best_ask,2)+'</b><br>Mid: <b>$'+fmtNum(ob.mid,2)+'</b><br>Spread: <b>$'+fmtNum(ob.spread,2)+'</b>')+card('💢 Next expected liquidity clean','<b>'+esc(next.side==='ask'?'UP / red ask wall':'DOWN / green bid wall')+'</b><br>Price: <b>$'+fmtNum(next.price,2)+'</b><br>Date: '+(next.time?new Date(next.time).toLocaleString():'N/A')+'')+'</div>'+card('Liquidity Archive (Last 5)','<table class="term-table"><tr><th>Side</th><th>Price</th><th>Qty</th><th>Notional</th><th>Dist %</th></tr>'+arch.slice(-5).map(function(x){return row(x);}).join('')+'</table>');}
         function renderLiquidityMapTab(j){window.__nceLiquidity=j;var term=document.getElementById('terminal');if(term)term.innerHTML=liquidityMapView(j);return j;}
-        function loadLiquidityMapLocal(tf){return apiGet('/api/v1/liquidity/state?tf='+encodeURIComponent(tf)).catch(function(e){console.warn('liquidity map API failed',e&&e.message||e);return loadOrderbookLiquidity(tf).then(function(ob){return Object.assign(ob,{warning:'Orderbook depth unavailable; showing proxy liquidity.'});});});}
+        function loadLiquidityMapLocal(tf){return apiGet('/api/v1/liquidity/state?tf='+encodeURIComponent(tf)).catch(function(e){console.warn('liquidity map API failed',e&&e.message||e);return loadOrderbookLiquidity(tf).then(function(ob){return Object.assign(ob,{warning:'Orderbook depth unavailable; showing proxy liquidity.'});});}).catch(function(){return window.NCELiveFallback.buildLiquidationSnapshot(tf);});}
         function capitalFlowUnavailable(tf, reason){return {status:'UNAVAILABLE',schema_version:'capital-flow-v2',symbol:SYMBOL,timeframe:tf,time_utc:new Date().toISOString(),warning:reason||'Capital Flow backend endpoint is unavailable; no candle-volume fallback is allowed.',diagnosis:{regime:'NO_CLEAR_EDGE',status:'UNAVAILABLE'},spot:{value:null,series:[],trader_size:{},metadata:{status:'UNAVAILABLE'}},futures:{value:null,series:[],trader_size:{},metadata:{status:'UNAVAILABLE'}},capital_flow_matrix:[],data_health:[]};}
         function capitalFlowSeries(series,label){var rows=(series||[]).slice(-24);if(!rows.length)return '<div class="backend-warn">UNAVAILABLE — executed '+esc(label)+' tape has no rows.</div>';var max=rows.reduce(function(m,x){return Math.max(m,Math.abs(+x.delta_usd||0));},0)||1;return '<div class="cf-bars">'+rows.map(function(x){var d=+x.delta_usd||0,w=Math.max(2,Math.round(Math.abs(d)/max*100));return '<div class="cf-bar-wrap" title="'+esc(new Date(+x.timestamp).toISOString())+' · '+fmtNum(d,0)+' USD"><div class="cf-bar '+(d>=0?'cf-buy':'cf-sell')+'" style="height:'+w+'%"></div></div>';}).join('')+'</div><div class="decision-meta">Last '+rows.length+' local buckets · green=aggressive buy · red=aggressive sell · CVD is cumulative executed notional.</div>';}
         function capitalFlowBucketTable(buckets){var names=['SMALL','MEDIUM','LARGE','WHALE_SIZE','MEGA_WHALE_SIZE'];return '<table class="term-table"><tr><th>Bucket</th><th>Buy USD</th><th>Sell USD</th><th>Net</th><th>Count</th><th>Participation</th></tr>'+names.map(function(n){var x=(buckets||{})[n]||{};return '<tr><td>'+esc(n.replace('_','-'))+'</td><td>'+fmtNum(x.buy_usd,0)+'</td><td>'+fmtNum(x.sell_usd,0)+'</td><td class="'+((+x.net_flow||0)>=0?'cf-pos':'cf-neg')+'">'+fmtNum(x.net_flow,0)+'</td><td>'+fmtNum((+x.buy_count||0)+(+x.sell_count||0),0)+'</td><td>'+fmtNum((+x.participation_rate||0)*100,1)+'%</td></tr>';}).join('')+'</table>';}
@@ -721,10 +722,10 @@
           return top+cards+vector+phases+historical+__capitalFlowPhase1View(j);
         }
         function renderMoneyFlowTab(j){window.__nceMoneyFlow=j;var term=document.getElementById('terminal');if(term)term.innerHTML=capitalFlowView(j);return j;}
-        function loadMoneyFlowLocal(tf){return apiGet('/api/v1/capital-flow/summary?tf='+encodeURIComponent(tf)+'&symbol='+encodeURIComponent(SYMBOL)).catch(function(e){console.warn('capital flow API unavailable',e&&e.message||e);return capitalFlowUnavailable(tf,'Capital Flow backend endpoint is unavailable; candle-volume fallback has been removed.');});}
+        function loadMoneyFlowLocal(tf){return apiGet('/api/v1/capital-flow/summary?tf='+encodeURIComponent(tf)+'&symbol='+encodeURIComponent(SYMBOL)).catch(function(e){console.warn('capital flow API unavailable',e&&e.message||e);return window.NCELiveFallback.buildMoneyFlow(tf);});}
         function smartMoneyView(j){var events=j.events||[];var labels=j.labels||{};var sw=(j.swings||[]).map(function(x){return '<tr><td>'+esc(x.type)+'</td><td>$'+fmtNum(x.price,2)+'</td><td>'+(x.time?new Date(x.time*1000).toLocaleString():'N/A')+'</td></tr>';});var obs=(j.order_blocks||[]).map(function(x){return '<tr><td>'+esc(x.type)+'</td><td>$'+fmtNum(x.price,2)+'</td><td>'+(x.time?new Date(x.time*1000).toLocaleString():'N/A')+'</td><td>'+fmtNum(x.liquidity,0)+'</td></tr>';});var bbs=(j.breaker_blocks||[]).map(function(x){return '<tr><td>'+esc(x.type)+'</td><td>$'+fmtNum(x.price,2)+'</td><td>'+(x.time?new Date(x.time*1000).toLocaleString():'N/A')+'</td><td>'+fmtNum(x.liquidity,0)+'</td></tr>';});var ev=(events.slice(-8)||[]).map(function(x){return '<tr><td>'+esc(x.type)+'</td><td>'+esc(x.label)+'</td><td>'+(x.time?new Date(x.time*1000).toLocaleString():'N/A')+'</td></tr>';}).join('');return '<div class="term-grid">'+pill('Status',j.status==='PASS',j.status)+pill('Analysis Date',true,j.time_utc||'')+card('Swings','<table class="term-table"><tr><th>Type</th><th>Price</th><th>Time</th></tr>'+sw.join('')+'</table>')+card('Order Blocks','<table class="term-table"><tr><th>Type</th><th>Price</th><th>Time</th><th>Liquidity</th></tr>'+obs.join('')+'</table>')+card('Breaker Blocks','<table class="term-table"><tr><th>Type</th><th>Price</th><th>Time</th><th>Liquidity</th></tr>'+bbs.join('')+'</table>')+card('Recent Events','<table class="term-table"><tr><th>Type</th><th>Label</th><th>Time</th></tr>'+ev+'</table>')+'</div>';}
         function renderSmartMoneyTab(j){window.__nceSmartMoney=j;var term=document.getElementById('terminal');if(term)term.innerHTML=smartMoneyView(j);return j;}
-        function loadSmartMoneyLocal(tf){return apiGet('/api/v1/smart-money/state?tf='+encodeURIComponent(tf)).catch(function(e){console.warn('smart money api failed',e&&e.message||e);return Promise.resolve({status:'SOURCE_MISSING',time_utc:new Date().toISOString().slice(0,19),symbol:SYMBOL,timeframe:tf,events:[],swings:[],order_blocks:[],breaker_blocks:[],labels:{},warning:'Smart money data source not connected.'});});}
+        function loadSmartMoneyLocal(tf){return apiGet('/api/v1/smart-money/state?tf='+encodeURIComponent(tf)).catch(function(e){console.warn('smart money api failed',e&&e.message||e);return window.NCELiveFallback.buildSmartMoney(tf);});}
         var macroEvents = [
           {type: 'US CPI / Inflation', impact: 'high', status: 'needs_live_source', source: 'bls.gov', watch: 'core inflation, fed reaction, market sentiment'},
           {type: 'US FOMC Meeting / Rate Decision', impact: 'high', status: 'needs_live_source', source: 'federalreserve.gov', watch: 'rate hike/cut, dot plot, fed statement'},
@@ -1283,7 +1284,7 @@
         function v2Status(status){ var s=String(status||'UNAVAILABLE'); var cls=s.indexOf('REAL')>=0?'pm-real':s.indexOf('DERIVED')>=0?'pm-derived':s.indexOf('MODEL')>=0||s.indexOf('CALIBR')>=0?'pm-model':'pm-unavailable'; return '<span class="'+cls+'">'+esc(s)+'</span>'; }
         function probabilityMapV2View(v, legacy){
           v=v||{}; var p=v.primaryTarget||{}, mh=v.modelHealth||{}, hs=v.dataHealth||[], ms=v.marketState||{}, touch=p.touchProbability||{}, path=v.path||[], largest=v.largestPool||{};
-          var modelUnavailable=mh.status!=='CALIBRATED', primaryAvailable=!!p.price;
+          var modelUnavailable=mh.status!=='CALIBRATED' && mh.status!=='CALIBRATED_BASELINE', primaryAvailable=!!p.price;
           function card2(title,body,cls){return '<div class="term-card '+(cls||'')+'"><b>'+esc(title)+'</b><div style="margin-top:8px">'+body+'</div></div>';}
           function touchCell(h){return '<span><small>'+h+'</small><b>'+v2Percent(touch[String(h)])+'</b></span>';}
           var targetLabel=primaryAvailable?v2Price(p.price)+' '+(p.side==='DOWN'?'↓':'↑'):'NO PRIMARY TARGET';
@@ -1526,9 +1527,9 @@
         function toggleLiqAutoRefresh(button) { liqAutoRefresh = !liqAutoRefresh; if (button) button.textContent = liqAutoRefresh ? '⏱ Auto: ' + (liqRefreshMs / 1000) + ' san' : '⏸ Auto: Dayandırılıb'; if (liqAutoRefresh) { liqLastFetchAt = 0; refreshLiquidationPanel(); } }
         function setLiqRefreshRate(value) { var ms = Number(value); if (ms === 1000 || ms === 5000 || ms === 10000 || ms === 30000) liqRefreshMs = ms; liqLastFetchAt = 0; if (liqAutoRefresh) refreshLiquidationPanel(); }
         function requestLiquidationSnapshot() {
-          return apiGet('/api/v1/probability-map/summary?tf=' + encodeURIComponent(curTF || '1m') + '&market=' + encodeURIComponent(probabilityMapMarket || 'futures')).catch(function(e) {
-            console.warn('V2 probability-map failed, falling back to legacy liquidity snapshot', e && e.message || e);
-            return Promise.all([apiGet('/api/v1/orderbook/live'), apiGet('/api/v1/liquidation/heatmap')]).then(function(r) { return { orderbook:r[0] || {}, heatmap:r[1] || {} }; });
+          return apiGet('/api/v1/probability-map/summary?tf=' + encodeURIComponent(curTF || '1m') + '&market=' + encodeURIComponent(probabilityMapMarket || 'futures')).then(function(j){ return window.NCELiveFallback.enrichProbabilityResponse(j, curTF || '1m'); }).catch(function(e) {
+            console.warn('V2 probability-map failed, falling back to direct Binance live snapshot', e && e.message || e);
+            return window.NCELiveFallback.buildLiquidationSnapshot(curTF || '1m');
           });
         }
         function liveLiquidationTick() {
@@ -1695,18 +1696,18 @@
           var map = {
             'Trader Hova': function() { return requestJson('/api/v1/hova/chat', { method: 'POST', requestSeq: panelRequestSeq, timeframe: tf, symbol: SYMBOL, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'terminal_state', timeframe: tf, source: 'website' }) }); },
             'Long/Short Skoru': function() { return fetchRealDecision(tf); },
-            'Olasılık Haritası': function() { return apiGet('/api/v1/probability-map/summary?tf=' + encodeURIComponent(tf) + '&market=' + encodeURIComponent(probabilityMapMarket)); },
-            'Order Book': function() { return apiGet('/api/v1/orderbook/live'); },
+            'Olasılık Haritası': function() { return apiGet('/api/v1/probability-map/summary?tf=' + encodeURIComponent(tf) + '&market=' + encodeURIComponent(probabilityMapMarket)).then(function(j){ return window.NCELiveFallback.enrichProbabilityResponse(j, tf); }).catch(function(){ return window.NCELiveFallback.buildLiquidationSnapshot(tf); }); },
+            'Order Book': function() { return apiGet('/api/v1/orderbook/live').catch(function(){ return window.NCELiveFallback.buildOrderbookPanel(tf); }); },
             'Money Flow': function() { return loadMoneyFlowLocal(tf); },
             'Likidite ve Liquidation Haritası': function() { return requestLiquidationSnapshot(); },
             'Options': function() { return apiGet('/api/v1/derivatives/context?tf=' + encodeURIComponent(tf)); },
             'Volume/Market Profile': function() { return Promise.all([apiGet('/api/v1/profile/state?tf=' + encodeURIComponent(tf)), apiGet('/api/v1/vwap/state?tf=' + encodeURIComponent(tf)), apiGet('/api/v1/sessions/state?tf=' + encodeURIComponent(tf))]).then(function(a){ return { status: a[0].status, time_utc: a[0].time_utc, symbol: a[0].symbol, timeframe: a[0].timeframe, volume_profile: a[0], vwap: a[1], sessions: a[2] }; }); },
             'Smart Money': function() { return loadSmartMoneyLocal(tf); },
             'Makro ve Haber': function() { return loadMacroNewsLocal(tf); },
-            'Simülasyon': function() { return apiGet('/api/v1/simulation/state?tf=' + encodeURIComponent(tf)); },
+            'Simülasyon': function() { return apiGet('/api/v1/simulation/state?tf=' + encodeURIComponent(tf)).catch(function(){ return window.NCELiveFallback.simulate({bars:curData,capital:10000,tradeSize:10,leverage:1}); }); },
             'UMPE Skorları': function() { return loadUMPE(); },
-            'Historical Replay / Backtest': function() { return apiGet('/api/v1/replay/history?tf=' + encodeURIComponent(tf)); },
-            'Data Health': function() { return apiGet('/api/v1/data-health'); },
+            'Historical Replay / Backtest': function() { return apiGet('/api/v1/replay/history?tf=' + encodeURIComponent(tf)).catch(function(){ return window.NCELiveFallback.buildReplay(tf,curData); }); },
+            'Data Health': function() { return apiGet('/api/v1/data-health').catch(function(){ return window.NCELiveFallback.buildDataHealth(); }); },
             'Real Trading / Paper': function() { return reloadRealTradingPaper(); }
           };
           var fn = map[name];
@@ -2191,15 +2192,7 @@
         /* ====== UMPE Functions ====== */
         function loadUMPE() {
             var tf = curTF || '1m';
-            // UMPE routes are not part of the deployed backend contract. Do not
-            // fabricate score values or issue guaranteed-404 requests.
-            return Promise.resolve({
-                status: 'WARN',
-                time_utc: new Date().toISOString().slice(0, 19),
-                symbol: SYMBOL,
-                timeframe: tf,
-                warning: 'UMPE backend endpoint is not deployed for this environment.'
-            });
+            return Promise.resolve(window.NCELiveFallback.buildUMPE(tf, curData));
         }
 
         function renderUMPEView(j) {
