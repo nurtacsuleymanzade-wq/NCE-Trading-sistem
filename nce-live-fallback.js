@@ -392,6 +392,8 @@
     var last = rows.slice(-1)[0] || {}, first = rows.slice(-100)[0] || last;
     return { status: 'LOCAL_DERIVED', source: 'GitHub Pages local closed-bar archive', time_utc: iso(), symbol: SYMBOL, timeframe: tf,
       sample_size: rows.length, latest_close: num(last.c), window_return: first.c ? (last.c - first.c) / first.c : null,
+      summary: { sample_size: rows.length, latest_close: num(last.c), window_return: first.c ? (last.c - first.c) / first.c : null, model_status: 'DESCRIPTIVE_ONLY' },
+      recent_trades: [], assumptions: { source: 'Local bars', lookahead: false, strategy_pnl: 'not calculated' },
       warning: 'Local replay summary is descriptive; no strategy PnL or calibrated edge is claimed.' };
   }
   function simulate(input) {
@@ -401,8 +403,10 @@
     var capital = num(input.capital, 0), size = capital * num(input.tradeSize, 0) / 100;
     var gross = move == null ? null : size * move * num(input.leverage, 1);
     var fees = size * (0.0005 * 2), net = gross == null ? null : gross - fees;
-    return { status: bars.length >= 2 ? 'LOCAL_BENCHMARK' : 'INSUFFICIENT_DATA', start: start, end: end,
+    return { status: bars.length >= 2 ? 'LOCAL_BENCHMARK' : 'INSUFFICIENT_DATA', current_price: end, start: start, end: end,
       observed_return: move, estimated_net_pnl: net, fee_model: 'taker 5 bps each side; benchmark only',
+      scenarios: { observed_window: { net_return_pct: move == null ? null : move * 100, projected_price: end } },
+      assumptions: { bars: bars.length, leverage: num(input.leverage, 1), trade_size_pct: num(input.tradeSize, 0), fees: '5 bps each side', strategy: 'not inferred' },
       html: '<span class="backend-warn">LOCAL BENCHMARK · bu strategiya backtesti deyil.</span><br>Window return: <b>' +
         (move == null ? 'Məlumat yoxdur' : (move * 100).toFixed(3) + '%') + '</b> · Estimated fee-adjusted PnL: <b>' +
         (net == null ? 'Məlumat yoxdur' : '$' + net.toFixed(2)) + '</b><br><span class="decision-meta">Observed local bars only; entry/exit logic is not inferred.</span>' };
