@@ -22,6 +22,7 @@ from .probability_map import (
     volume_profile,
 )
 from .liquidity_probability_v2 import build_v2_decision
+from .horizon_probability import build_horizon_forecast, observer_metrics
 
 
 TF_SECONDS = {"1s": 1, "5s": 5, "15s": 15, "30s": 30, "1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "24h": 86400}
@@ -279,6 +280,44 @@ def create_router(db_path: str | None = None):
         finally:
             store.close()
 
+    def probability_horizon_snapshot(symbol: str) -> dict[str, Any]:
+        """Build and persist independent 5/10/30m forecasts from 1s/1m/5m state."""
+        symbol = symbol.upper()
+        store = CapitalFlowStore(database)
+        try:
+            now_ms = int(time.time()) * 1000
+            store.resolve_horizon_predictions(symbol, now_ms)
+            observer = observer_metrics(store.horizon_observer_rows(symbol))
+            trades = store.trades("futures", symbol, since_ms=now_ms - 6 * 60 * 1000, limit=100000)
+            book_row = store.latest("orderbook_raw", symbol, "futures")
+            book = (book_row or {}).get("payload") or {}
+            current_price = float(trades[-1].price) if trades else 0.0
+            if not current_price and book.get("bids") and book.get("asks"):
+                current_price = (float(book["bids"][0][0]) + float(book["asks"][0][0])) / 2
+            if not current_price:
+                return {"status": "SOURCE_MISSING", "schemaVersion": "probability-horizons-v2", "symbol": symbol, "timestamp": now_ms, "reason": "fresh Futures aggTrade/orderbook price is required"}
+            funding_row = store.latest("funding_raw", symbol)
+            funding = float(funding_row["funding_rate"]) if funding_row and funding_row.get("funding_rate") is not None else None
+            payload = build_horizon_forecast(
+                trades,
+                current_price=current_price,
+                book=book,
+                oi_history=store.history("oi_raw", symbol, 240),
+                funding_rate=funding,
+                observer=observer,
+                now_ms=now_ms,
+            )
+            payload["sourceHealth"] = {
+                "trades": "REAL" if trades else "MISSING",
+                "orderbook": "REAL" if book else "MISSING",
+                "openInterest": "REAL" if store.latest("oi_raw", symbol) else "MISSING",
+                "funding": "REAL" if funding_row else "MISSING",
+            }
+            store.record_horizon_forecast(payload)
+            return payload
+        finally:
+            store.close()
+
     def snapshot(tf: str, symbol: str):
         if tf not in TF_SECONDS:
             return {"status": "UNRELIABLE", "time_utc": _now(), "warning": f"unsupported timeframe: {tf}", "allowed": sorted(TF_SECONDS)}
@@ -387,6 +426,19 @@ def create_router(db_path: str | None = None):
     @router.get("/probability-map/summary")
     def probability_map_summary(tf: str = Query("5m"), symbol: str = Query("BTCUSDT"), market: str = Query("futures")):
         return probability_map_snapshot(tf, symbol, market)
+
+    @router.get("/probability-map/horizons")
+    def probability_map_horizons(symbol: str = Query("BTCUSDT")):
+        return probability_horizon_snapshot(symbol)
+
+    @router.get("/probability-map/observer")
+    def probability_map_observer(symbol: str = Query("BTCUSDT")):
+        store = CapitalFlowStore(database)
+        try:
+            store.resolve_horizon_predictions(symbol.upper())
+            return observer_metrics(store.horizon_observer_rows(symbol.upper()))
+        finally:
+            store.close()
 
     @router.get("/probability-map/targets")
     def probability_map_targets(tf: str = Query("5m"), symbol: str = Query("BTCUSDT"), market: str = Query("futures")):

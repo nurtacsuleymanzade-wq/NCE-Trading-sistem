@@ -11,6 +11,7 @@ from typing import Any, Awaitable, Callable
 
 from .engine import normalize_agg_trade
 from .probability_map import liquidity_lifecycle
+from .horizon_probability import build_horizon_forecast, observer_metrics
 from .storage import CapitalFlowStore
 
 
@@ -139,6 +140,8 @@ class BinancePublicCollector:
             "last_top_trader_update": None,
             "last_global_ls_update": None,
             "last_liquidation": None,
+            "last_probability_snapshot": None,
+            "last_probability_resolution": None,
             "reconnect_count": 0,
             "error_count": 0,
         }
@@ -165,6 +168,45 @@ class BinancePublicCollector:
             except Exception:
                 self.error_count += 1
             await asyncio.sleep(5)
+
+    async def probability_observer(self) -> None:
+        """Freeze one multi-horizon prediction per second and resolve due rows.
+
+        Raw snapshots are second-resolution. Reported quality metrics are
+        purged by the evaluator, so overlapping labels do not inflate accuracy.
+        """
+        cached_observer: dict[str, Any] = {"status": "COLLECTING", "resolvedSamples": 0}
+        metrics_at = 0
+        while self.running:
+            try:
+                now_ms = int(time.time()) * 1000
+                resolved = self.store.resolve_horizon_predictions(self.symbol.upper(), now_ms)
+                if resolved:
+                    self.health["last_probability_resolution"] = now_ms
+                if now_ms - metrics_at >= 60_000:
+                    cached_observer = observer_metrics(self.store.horizon_observer_rows(self.symbol.upper()))
+                    metrics_at = now_ms
+                trades = self.store.trades("futures", self.symbol.upper(), since_ms=now_ms - 6 * 60 * 1000, limit=100000)
+                book_row = self.store.latest("orderbook_raw", self.symbol.upper(), "futures")
+                book = (book_row or {}).get("payload") or {}
+                current = float(trades[-1].price) if trades else 0.0
+                if not current and book.get("bids") and book.get("asks"):
+                    current = (float(book["bids"][0][0]) + float(book["asks"][0][0])) / 2
+                if current:
+                    funding_row = self.store.latest("funding_raw", self.symbol.upper())
+                    funding = float(funding_row["funding_rate"]) if funding_row and funding_row.get("funding_rate") is not None else None
+                    payload = build_horizon_forecast(
+                        trades, current_price=current, book=book,
+                        oi_history=self.store.history("oi_raw", self.symbol.upper(), 240),
+                        funding_rate=funding, observer=cached_observer, now_ms=now_ms,
+                    )
+                    self.store.record_horizon_forecast(payload)
+                    self.health["last_probability_snapshot"] = now_ms
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self.error_count += 1
+            await asyncio.sleep(max(.05, 1 - (time.time() % 1)))
 
     async def _rest_json(self, url: str, params: dict[str, Any]) -> dict[str, Any] | list[Any]:
         try:
@@ -392,7 +434,7 @@ class BinancePublicCollector:
         tasks = [asyncio.create_task(fn()) for fn in (
             [self.spot_aggtrade, self.futures_aggtrade] if enable_futures else [self.spot_aggtrade]
         )]
-        tasks.extend(asyncio.create_task(fn()) for fn in (self.liquidations, lambda: self.depth_stream("spot"), lambda: self.depth_stream("futures"), self.poll_derivatives))
+        tasks.extend(asyncio.create_task(fn()) for fn in (self.liquidations, lambda: self.depth_stream("spot"), lambda: self.depth_stream("futures"), self.poll_derivatives, self.probability_observer))
         heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         stop_task = asyncio.create_task(stop_event.wait())
         try:

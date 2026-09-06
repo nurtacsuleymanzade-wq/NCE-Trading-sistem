@@ -95,11 +95,22 @@ CREATE TABLE IF NOT EXISTS historical_analogues (
   id INTEGER PRIMARY KEY AUTOINCREMENT, symbol TEXT NOT NULL, timestamp_ms INTEGER NOT NULL,
   target_id TEXT NOT NULL, payload_json TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS horizon_predictions (
+  prediction_id TEXT PRIMARY KEY, symbol TEXT NOT NULL, timestamp_ms INTEGER NOT NULL,
+  horizon_minutes INTEGER NOT NULL, due_ms INTEGER NOT NULL, origin_price REAL NOT NULL,
+  model_version TEXT NOT NULL, feature_hash TEXT NOT NULL, payload_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS horizon_outcomes (
+  prediction_id TEXT PRIMARY KEY, due_ms INTEGER NOT NULL, resolved_ms INTEGER NOT NULL,
+  realized_price REAL NOT NULL, actual_class TEXT NOT NULL, payload_json TEXT NOT NULL,
+  FOREIGN KEY(prediction_id) REFERENCES horizon_predictions(prediction_id)
+);
 CREATE INDEX IF NOT EXISTS idx_spot_trades_time ON spot_aggtrades_raw(symbol, timestamp_ms);
 CREATE INDEX IF NOT EXISTS idx_futures_trades_time ON futures_aggtrades_raw(symbol, timestamp_ms);
 CREATE INDEX IF NOT EXISTS idx_orderbook_time ON orderbook_raw(symbol, timestamp_ms);
 CREATE INDEX IF NOT EXISTS idx_orderbook_events_time ON orderbook_events_raw(symbol, market, timestamp_ms);
 CREATE INDEX IF NOT EXISTS idx_probability_snapshots_time ON probability_target_snapshots(symbol, timestamp_ms);
+CREATE INDEX IF NOT EXISTS idx_horizon_predictions_due ON horizon_predictions(symbol, due_ms);
 """
 
 
@@ -238,6 +249,66 @@ class CapitalFlowStore:
         rows = self.conn.execute("SELECT * FROM probability_calibration WHERE symbol = ? AND horizon_minutes = ? ORDER BY score_low", (symbol, horizon_minutes)).fetchall()
         return [dict(row) for row in rows]
 
+    def record_horizon_forecast(self, payload: dict[str, Any]) -> int:
+        """Append frozen horizon predictions. Repeated calls are idempotent."""
+        rows = []
+        for item in payload.get("horizons", []):
+            frozen = dict(item)
+            frozen["originPrice"] = payload.get("currentPrice")
+            frozen["featureHash"] = payload.get("featureHash")
+            frozen["predictionTimestamp"] = payload.get("timestamp")
+            rows.append((
+                item["predictionId"], payload.get("symbol", "BTCUSDT"), int(payload["timestamp"]),
+                int(item["horizonMinutes"]), int(item["resolvedAtMs"]), float(payload["currentPrice"]),
+                payload.get("schemaVersion", "probability-horizons-v2"), payload.get("featureHash", ""),
+                json.dumps(frozen, separators=(",", ":")),
+            ))
+        if rows:
+            before = self.conn.total_changes
+            self.conn.executemany("INSERT OR IGNORE INTO horizon_predictions(prediction_id,symbol,timestamp_ms,horizon_minutes,due_ms,origin_price,model_version,feature_hash,payload_json) VALUES(?,?,?,?,?,?,?,?,?)", rows)
+            self.conn.commit()
+            return self.conn.total_changes - before
+        return 0
+
+    def resolve_horizon_predictions(self, symbol: str = "BTCUSDT", now_ms: int | None = None, limit: int = 2000) -> int:
+        """Resolve due predictions against the first observed trade after due time."""
+        from .horizon_probability import classify_realized_zone
+
+        now_ms = int(now_ms or __import__("time").time() * 1000)
+        pending = self.conn.execute(
+            "SELECT p.* FROM horizon_predictions p LEFT JOIN horizon_outcomes o ON o.prediction_id=p.prediction_id WHERE p.symbol=? AND p.due_ms<=? AND o.prediction_id IS NULL ORDER BY p.due_ms LIMIT ?",
+            (symbol, now_ms, limit),
+        ).fetchall()
+        rows = []
+        for row in pending:
+            trade = self.conn.execute(
+                "SELECT timestamp_ms,price FROM futures_aggtrades_raw WHERE symbol=? AND timestamp_ms>=? AND timestamp_ms<=? ORDER BY timestamp_ms,aggregate_trade_id LIMIT 1",
+                (symbol, row["due_ms"], row["due_ms"] + 60_000),
+            ).fetchone()
+            if not trade:
+                continue
+            prediction = json.loads(row["payload_json"])
+            prediction["originPrice"] = row["origin_price"]
+            actual = classify_realized_zone(prediction, float(trade["price"]))
+            outcome = {"actualClass": actual, "realizedPrice": float(trade["price"]), "originPrice": row["origin_price"], "lateByMs": int(trade["timestamp_ms"]) - int(row["due_ms"]), "source": "first observed Binance Futures aggTrade at/after frozen due time"}
+            rows.append((row["prediction_id"], row["due_ms"], int(trade["timestamp_ms"]), float(trade["price"]), actual, json.dumps(outcome, separators=(",", ":"))))
+        if rows:
+            self.conn.executemany("INSERT OR IGNORE INTO horizon_outcomes(prediction_id,due_ms,resolved_ms,realized_price,actual_class,payload_json) VALUES(?,?,?,?,?,?)", rows)
+            self.conn.commit()
+        return len(rows)
+
+    def horizon_observer_rows(self, symbol: str = "BTCUSDT", limit: int = 10000) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT p.horizon_minutes,p.payload_json,o.actual_class,o.realized_price,o.resolved_ms FROM horizon_predictions p JOIN horizon_outcomes o ON o.prediction_id=p.prediction_id WHERE p.symbol=? ORDER BY o.resolved_ms DESC LIMIT ?",
+            (symbol, limit),
+        ).fetchall()
+        result = []
+        for row in reversed(rows):
+            payload = json.loads(row["payload_json"])
+            payload.update({"horizonMinutes": row["horizon_minutes"], "actualClass": row["actual_class"], "realizedPrice": row["realized_price"], "resolvedAtMs": row["resolved_ms"]})
+            result.append(payload)
+        return result
+
     def liquidation_window(self, symbol: str = "BTCUSDT", since_ms: int | None = None) -> dict[str, float]:
         where = "WHERE symbol = ?" + (" AND timestamp_ms >= ?" if since_ms else "")
         params: list[Any] = [symbol]
@@ -280,7 +351,7 @@ class CapitalFlowStore:
 
     def health(self) -> dict[str, Any]:
         tables = {}
-        for table in ("spot_aggtrades_raw", "futures_aggtrades_raw", "orderbook_raw", "orderbook_events_raw", "oi_raw", "funding_raw", "liquidations_raw", "global_ls_raw", "probability_target_snapshots", "target_outcomes"):
+        for table in ("spot_aggtrades_raw", "futures_aggtrades_raw", "orderbook_raw", "orderbook_events_raw", "oi_raw", "funding_raw", "liquidations_raw", "global_ls_raw", "probability_target_snapshots", "target_outcomes", "horizon_predictions", "horizon_outcomes"):
             tables[table] = self.conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         return {"path": str(self.path), "status": "PASS", "tables": tables}
 
