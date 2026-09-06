@@ -257,9 +257,9 @@
       get(FAPI + '/depth?symbol=' + SYMBOL + '&limit=1000'),
       get(FAPI + '/ticker/bookTicker?symbol=' + SYMBOL),
       get(FAPI + '/aggTrades?symbol=' + SYMBOL + '&limit=1000'),
-      get(FAPI + '/markPriceKlines?symbol=' + SYMBOL + '&interval=1m&limit=120'),
-      get(FAPI + '/openInterest?symbol=' + SYMBOL),
-      get(FAPI + '/premiumIndex?symbol=' + SYMBOL),
+      get(FAPI + '/markPriceKlines?symbol=' + SYMBOL + '&interval=1m&limit=120').catch(function () { return []; }),
+      get(FAPI + '/openInterest?symbol=' + SYMBOL).catch(function () { return null; }),
+      get(FAPI + '/premiumIndex?symbol=' + SYMBOL).catch(function () { return {}; }),
       get(FDATA + '/globalLongShortAccountRatio?symbol=' + SYMBOL + '&period=5m&limit=1').catch(function () { return []; })
     ]).then(function (a) {
       var premium = a[5] || {};
