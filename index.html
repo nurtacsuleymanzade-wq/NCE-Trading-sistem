@@ -1527,7 +1527,7 @@
         function toggleLiqAutoRefresh(button) { liqAutoRefresh = !liqAutoRefresh; if (button) button.textContent = liqAutoRefresh ? '⏱ Auto: ' + (liqRefreshMs / 1000) + ' san' : '⏸ Auto: Dayandırılıb'; if (liqAutoRefresh) { liqLastFetchAt = 0; refreshLiquidationPanel(); } }
         function setLiqRefreshRate(value) { var ms = Number(value); if (ms === 1000 || ms === 5000 || ms === 10000 || ms === 30000) liqRefreshMs = ms; liqLastFetchAt = 0; if (liqAutoRefresh) refreshLiquidationPanel(); }
         function requestLiquidationSnapshot() {
-          return apiGet('/api/v1/probability-map/summary?tf=' + encodeURIComponent(curTF || '1m') + '&market=' + encodeURIComponent(probabilityMapMarket || 'futures')).then(function(j){ return window.NCELiveFallback.enrichProbabilityResponse(j, curTF || '1m'); }).catch(function(e) {
+          return apiGet('/api/v1/probability-map/summary?tf=' + encodeURIComponent(curTF || '1m') + '&market=' + encodeURIComponent(probabilityMapMarket || 'futures')).then(function(j){ var enriched=window.NCELiveFallback.enrichProbabilityResponse(j, curTF || '1m'); return enriched && enriched.v2 && !(enriched.v2.primaryTarget||{}).price ? window.NCELiveFallback.buildLiquidationSnapshot(curTF || '1m') : enriched; }).catch(function(e) {
             console.warn('V2 probability-map failed, falling back to direct Binance live snapshot', e && e.message || e);
             return window.NCELiveFallback.buildLiquidationSnapshot(curTF || '1m');
           });
@@ -1696,7 +1696,7 @@
           var map = {
             'Trader Hova': function() { return requestJson('/api/v1/hova/chat', { method: 'POST', requestSeq: panelRequestSeq, timeframe: tf, symbol: SYMBOL, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'terminal_state', timeframe: tf, source: 'website' }) }); },
             'Long/Short Skoru': function() { return fetchRealDecision(tf); },
-            'Olasılık Haritası': function() { return apiGet('/api/v1/probability-map/summary?tf=' + encodeURIComponent(tf) + '&market=' + encodeURIComponent(probabilityMapMarket)).then(function(j){ return window.NCELiveFallback.enrichProbabilityResponse(j, tf); }).catch(function(){ return window.NCELiveFallback.buildLiquidationSnapshot(tf); }); },
+            'Olasılık Haritası': function() { return apiGet('/api/v1/probability-map/summary?tf=' + encodeURIComponent(tf) + '&market=' + encodeURIComponent(probabilityMapMarket)).then(function(j){ var enriched=window.NCELiveFallback.enrichProbabilityResponse(j, tf); return enriched && enriched.v2 && !(enriched.v2.primaryTarget||{}).price ? window.NCELiveFallback.buildLiquidationSnapshot(tf) : enriched; }).catch(function(){ return window.NCELiveFallback.buildLiquidationSnapshot(tf); }); },
             'Order Book': function() { return apiGet('/api/v1/orderbook/live').catch(function(){ return window.NCELiveFallback.buildOrderbookPanel(tf); }); },
             'Money Flow': function() { return loadMoneyFlowLocal(tf); },
             'Likidite ve Liquidation Haritası': function() { return requestLiquidationSnapshot(); },
