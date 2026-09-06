@@ -27,7 +27,7 @@
 
   function fetchJson(url, timeout) {
     var ctl = new AbortController();
-    var timer = setTimeout(function () { ctl.abort(); }, timeout || 8500);
+    var timer = setTimeout(function () { ctl.abort(); }, timeout || 15000);
     return fetch(url, {cache:'no-store', signal:ctl.signal}).then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
@@ -36,8 +36,15 @@
   function cached(key, url, ttl, fallback) {
     var hit = requestCache[key], now = Date.now();
     if (hit && now - hit.at < ttl) return Promise.resolve(hit.value);
-    return fetchJson(url).then(function (value) { requestCache[key] = {at:Date.now(), value:value}; return value; })
-      .catch(function () { return hit ? hit.value : fallback; });
+    if (hit && hit.pending) return hit.pending;
+    var record = hit || {at:0, value:null, pending:null};
+    record.pending = fetchJson(url).then(function (value) {
+      record.at = Date.now(); record.value = value; return value;
+    }).catch(function () {
+      return record.value != null ? record.value : fallback;
+    }).finally(function () { record.pending = null; });
+    requestCache[key] = record;
+    return record.pending;
   }
 
   function cleanKlines(rows) {
@@ -56,6 +63,29 @@
     var m = n(mark && mark.markPrice), close = klines && klines.length ? n(klines[klines.length - 1].c) : null;
     var candidates = [mid, m, close].filter(function (x) { return x && x > 0; }).sort(function (a, b) { return a - b; });
     return candidates.length ? candidates[Math.floor(candidates.length / 2)] : null;
+  }
+  function depthWithBackend(depth, backend) {
+    if (depth && ((depth.bids && depth.bids.length) || (depth.asks && depth.asks.length))) return depth;
+    var bids = [], asks = [];
+    (backend && backend.big_orders || []).forEach(function (x) {
+      var row = [String(n(x.price)), String(n(x.qty_btc))];
+      if (String(x.side).toLowerCase() === 'bid') bids.push(row); else if (String(x.side).toLowerCase() === 'ask') asks.push(row);
+    });
+    if (n(backend && backend.best_bid)) bids.push([String(backend.best_bid), '0.001']);
+    if (n(backend && backend.best_ask)) asks.push([String(backend.best_ask), '0.001']);
+    bids.sort(function (a,b) { return n(b[0],0)-n(a[0],0); }); asks.sort(function (a,b) { return n(a[0],0)-n(b[0],0); });
+    return {bids:bids, asks:asks};
+  }
+  function tradesWithBackend(trades, backend) {
+    if (trades && trades.length) return trades;
+    var rows = backend && backend.spot && backend.spot.series || [], out = [];
+    rows.forEach(function (x) {
+      var price = n(x.close) || n(x.open), time = n(x.bucket_end) || n(x.timestamp);
+      if (!price) return;
+      if (n(x.buy_usd,0) > 0) out.push({p:String(price),q:String(n(x.buy_usd)/price),m:false,T:time});
+      if (n(x.sell_usd,0) > 0) out.push({p:String(price),q:String(n(x.sell_usd)/price),m:true,T:time});
+    });
+    return out;
   }
 
   function priorWeek(daily) {
@@ -171,25 +201,34 @@
   }
 
   function buildFrom(raw,tf) {
-    var k5=cleanKlines(raw.klines5),current=normalizePrice(raw.premium,raw.ticker,k5);if(!current)throw new Error('No verified current price');var atr5=atr(raw.klines5,14)||current*.001;
-    var funding=n(raw.premium&&raw.premium.lastFundingRate,0),smart=smartMoneyModel(raw.klines5,raw.daily,current,atr5),flow=flowModel(raw.trades,raw.klines5,raw.oiHist,funding,current,atr5),heat=liquidationModel(current,raw.openInterest,funding,raw.ratio,raw.topRatio,atr5),book=orderbookModel(raw.depth,current,flow),modules=[smart,flow,heat,book],decision=finalDecision(modules,current,atr5);
-    return {status:'PASS',board_version:'NCE_LIQUIDATION_BOARD_V2',symbol:SYMBOL,timeframe:tf||'1m',time_utc:iso(),current_price:current,atr_5m:atr5,decision:decision,smart_money:smart,order_money_flow:flow,liquidation_heatmap:heat,orderbook_bot:book,data_policy:{direction:'LONG_OR_SHORT_ONLY',mixed_removed:true,price_semantics_checked:(decision.direction==='LONG'?decision.target.price>current:decision.target.price<current),observed:['order book','aggTrades','klines','open interest','funding','public long/short ratios'],derived:['EQH/EQL','PDH/PDL/PWH/PWL','volume profile','CVD/delta','wall persistence'],estimated:['liquidation cohort heatmap','ETA']}};
+    var k5=cleanKlines(raw.klines5), backend=raw.backendBook||{}, ticker=raw.ticker||{};
+    if ((!n(ticker.bidPrice)||!n(ticker.askPrice)) && n(backend.best_bid) && n(backend.best_ask)) ticker={bidPrice:backend.best_bid,askPrice:backend.best_ask};
+    var current=normalizePrice(raw.premium,ticker,k5)||n(backend.price);if(!current)throw new Error('No verified current price');var atr5=atr(raw.klines5,14)||current*.001;
+    var cleanedDepth=depthWithBackend(raw.depth,backend), cleanedTrades=tradesWithBackend(raw.trades,raw.backendFlow);
+    var funding=n(raw.premium&&raw.premium.lastFundingRate,0),smart=smartMoneyModel(raw.klines5,raw.daily,current,atr5),flow=flowModel(cleanedTrades,raw.klines5,raw.oiHist,funding,current,atr5),heat=liquidationModel(current,raw.openInterest,funding,raw.ratio,raw.topRatio,atr5),book=orderbookModel(cleanedDepth,current,flow),modules=[smart,flow,heat,book],decision=finalDecision(modules,current,atr5);
+    return {status:'PASS',board_version:'NCE_LIQUIDATION_BOARD_V2',symbol:SYMBOL,timeframe:tf||'1m',time_utc:iso(),current_price:current,atr_5m:atr5,decision:decision,smart_money:smart,order_money_flow:flow,liquidation_heatmap:heat,orderbook_bot:book,source_health:{backend_price_used:!normalizePrice(raw.premium,raw.ticker,k5)&&!!n(backend.price),backend_depth_used:!(raw.depth&&raw.depth.bids&&raw.depth.bids.length),backend_flow_used:!(raw.trades&&raw.trades.length)},data_policy:{direction:'LONG_OR_SHORT_ONLY',mixed_removed:true,price_semantics_checked:(decision.direction==='LONG'?decision.target.price>current:decision.target.price<current),observed:['order book','aggTrades','klines','open interest','funding','public long/short ratios'],derived:['EQH/EQL','PDH/PDL/PWH/PWL/PVWAP','volume profile','CVD/delta','wall persistence'],estimated:['liquidation cohort heatmap','ETA']}};
   }
   function build(tf) {
     return Promise.all([
-      cached('depth',FAPI+'/depth?symbol='+SYMBOL+'&limit=1000',2500,{bids:[],asks:[]}),
       cached('ticker',FAPI+'/ticker/bookTicker?symbol='+SYMBOL,1200,{}),
-      cached('trades',FAPI+'/aggTrades?symbol='+SYMBOL+'&limit=1000',2500,[]),
       cached('klines5',FAPI+'/klines?symbol='+SYMBOL+'&interval=5m&limit=576',45000,[]),
-      cached('daily',FAPI+'/klines?symbol='+SYMBOL+'&interval=1d&limit=20',300000,[]),
-      cached('oi',FAPI+'/openInterest?symbol='+SYMBOL,5000,{}),
       cached('premium',FAPI+'/premiumIndex?symbol='+SYMBOL,5000,{}),
-      cached('ratio',FDATA+'/globalLongShortAccountRatio?pair='+SYMBOL+'&period=5m&limit=1',20000,[]),
-      cached('topRatio',FDATA+'/topLongShortPositionRatio?pair='+SYMBOL+'&period=5m&limit=1',20000,[]),
-      cached('oiHist',FDATA+'/openInterestHist?symbol='+SYMBOL+'&period=5m&limit=30',20000,[]),
-      cached('backendBook',NCE_API+'/orderbook/live',3000,null),
-      cached('backendFlow',NCE_API+'/capital-flow/summary?tf='+encodeURIComponent(tf||'1m')+'&symbol='+SYMBOL,5000,null)
-    ]).then(function(a){return buildFrom({depth:a[0],ticker:a[1],trades:a[2],klines5:a[3],daily:a[4],openInterest:a[5],premium:a[6],ratio:a[7],topRatio:a[8],oiHist:a[9],backendBook:a[10],backendFlow:a[11]},tf);});
+      cached('backendBook',NCE_API+'/orderbook/live',3000,null)
+    ]).then(function(core){
+      return Promise.all([
+        cached('depth',FAPI+'/depth?symbol='+SYMBOL+'&limit=1000',2500,{bids:[],asks:[]}),
+        cached('trades',FAPI+'/aggTrades?symbol='+SYMBOL+'&limit=1000',2500,[]),
+        cached('daily',FAPI+'/klines?symbol='+SYMBOL+'&interval=1d&limit=20',300000,[]),
+        cached('oi',FAPI+'/openInterest?symbol='+SYMBOL,5000,{}),
+        cached('oiHist',FDATA+'/openInterestHist?symbol='+SYMBOL+'&period=5m&limit=30',20000,[])
+      ]).then(function(market){
+        return Promise.all([
+          cached('ratio',FDATA+'/globalLongShortAccountRatio?pair='+SYMBOL+'&period=5m&limit=1',20000,[]),
+          cached('topRatio',FDATA+'/topLongShortPositionRatio?pair='+SYMBOL+'&period=5m&limit=1',20000,[]),
+          cached('backendFlow',NCE_API+'/capital-flow/summary?tf='+encodeURIComponent(tf||'1m')+'&symbol='+SYMBOL,5000,null)
+        ]).then(function(context){return buildFrom({ticker:core[0],klines5:core[1],premium:core[2],backendBook:core[3],depth:market[0],trades:market[1],daily:market[2],openInterest:market[3],oiHist:market[4],ratio:context[0],topRatio:context[1],backendFlow:context[2]},tf);});
+      });
+    });
   }
 
   function ensureStyle(){if(document.getElementById('nce-lb2-style'))return;var s=document.createElement('style');s.id='nce-lb2-style';s.textContent='.lb2{--g:#3fb950;--r:#f85149;--b:#58a6ff;--y:#f2cc60;display:flex;flex-direction:column;gap:14px;max-width:1500px;margin:auto;color:#d7dee8}.lb2 *{box-sizing:border-box}.lb2-top,.lb2-frame{background:#121820;border:1px solid #2c3542;border-radius:12px}.lb2-top{padding:18px;border-color:#3f69a0;background:linear-gradient(135deg,#101a2d,#121820)}.lb2-kicker{font-size:12px;letter-spacing:.12em;color:#8abfff;font-weight:800}.lb2-decision{display:grid;grid-template-columns:minmax(220px,1.3fr) repeat(4,minmax(130px,.7fr));gap:10px;margin-top:12px}.lb2-main,.lb2-stat{padding:14px;background:#0d1117;border:1px solid #303946;border-radius:9px}.lb2-main.long{border-left:6px solid var(--g)}.lb2-main.short{border-left:6px solid var(--r)}.lb2-dir{font-size:34px;font-weight:900}.lb2-dir.long{color:var(--g)}.lb2-dir.short{color:var(--r)}.lb2-label{font-size:12px;color:#8b98aa;text-transform:uppercase;letter-spacing:.05em}.lb2-value{font-size:21px;font-weight:800;color:#f0f6fc;margin-top:5px}.lb2-sub{font-size:13px;color:#9aa7b8;margin-top:5px}.lb2-votes{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.lb2-vote{padding:12px;border-radius:9px;background:#0d1117;border:1px solid #303946}.lb2-vote.long{border-top:3px solid var(--g)}.lb2-vote.short{border-top:3px solid var(--r)}.lb2-vote b{display:block;margin:5px 0;font-size:18px}.lb2-frame{padding:18px}.lb2-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:14px}.lb2-head h3{margin:0;font-size:21px;color:#f0f6fc}.lb2-head p{margin:4px 0 0;color:#8b98aa}.lb2-badge{border:1px solid #4c5665;border-radius:14px;padding:4px 9px;font-size:12px;font-weight:800;white-space:nowrap}.lb2-real{color:#7ee787;border-color:#2f6d3a}.lb2-derived{color:#79c0ff;border-color:#315d83}.lb2-est{color:#f2cc60;border-color:#765c20}.lb2-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.lb2-metric{background:#0d1117;border:1px solid #252e39;border-radius:8px;padding:11px}.lb2-table{width:100%;border-collapse:collapse;font-size:14px}.lb2-table th,.lb2-table td{padding:9px;border-bottom:1px solid #252e39;text-align:left}.lb2-table th{color:#8b98aa;font-size:12px}.lb2-long{color:var(--g);font-weight:800}.lb2-short{color:var(--r);font-weight:800}.lb2-heat{display:grid;gap:5px}.lb2-heatrow{display:grid;grid-template-columns:90px 85px 1fr 95px 90px;gap:8px;align-items:center;padding:6px 8px;background:#0d1117;border-radius:5px}.lb2-bar{height:10px;background:#252e39;border-radius:6px;overflow:hidden}.lb2-bar i{display:block;height:100%}.lb2-api{font-size:13px;color:#9aa7b8}.lb2-note{padding:10px 12px;border-left:4px solid var(--y);background:#17150f;color:#d8c98c;margin-top:10px}.lb2-scroll{overflow-x:auto}@media(max-width:900px){.lb2-decision{grid-template-columns:1fr 1fr}.lb2-main{grid-column:1/-1}.lb2-votes{grid-template-columns:1fr 1fr}.lb2-heatrow{grid-template-columns:70px 70px 1fr}.lb2-heatrow span:nth-last-child(-n+2){display:none}}@media(max-width:560px){.lb2-decision,.lb2-votes{grid-template-columns:1fr}.lb2-stat{padding:10px}.lb2-frame{padding:13px}.lb2-head{flex-direction:column}}';document.head.appendChild(s);}
