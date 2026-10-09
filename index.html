@@ -973,7 +973,7 @@ if (!window.NCELiveFallback) {
 
 }
 </script>
-    <script src="nce-liquidation-board-v2.js?v=20260906"></script>
+    <script src="nce-liquidation-board-v2.js?v=20261009b"></script>
     <script>
 if (!window.NCELiquidationBoardV2) {
 (function () {
@@ -1202,8 +1202,8 @@ if (!window.NCELiquidationBoardV2) {
         cached('oiHist',FDATA+'/openInterestHist?symbol='+SYMBOL+'&period=5m&limit=30',20000,[])
       ]).then(function(market){
         return Promise.all([
-          cached('ratio',FDATA+'/globalLongShortAccountRatio?pair='+SYMBOL+'&period=5m&limit=1',20000,[]),
-          cached('topRatio',FDATA+'/topLongShortPositionRatio?pair='+SYMBOL+'&period=5m&limit=1',20000,[]),
+          cached('ratio',FDATA+'/globalLongShortAccountRatio?symbol='+SYMBOL+'&period=5m&limit=1',20000,[]),
+          cached('topRatio',FDATA+'/topLongShortPositionRatio?symbol='+SYMBOL+'&period=5m&limit=1',20000,[]),
           cached('backendFlow',NCE_API+'/capital-flow/summary?tf='+encodeURIComponent(tf||'1m')+'&symbol='+SYMBOL,5000,null)
         ]).then(function(context){return buildFrom({ticker:core[0],klines5:core[1],premium:core[2],backendBook:core[3],depth:market[0],trades:market[1],daily:market[2],openInterest:market[3],oiHist:market[4],ratio:context[0],topRatio:context[1],backendFlow:context[2]},tf);});
       });
