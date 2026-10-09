@@ -4,7 +4,7 @@
   var SYMBOL = 'BTCUSDT';
   var FAPI = 'https://fapi.binance.com/fapi/v1';
   var FDATA = 'https://fapi.binance.com/futures/data';
-  var NCE_API = 'https://nce-api.78.46.134.148.sslip.io/api/v1';
+  var NCE_API = (window.NCE_API_BASE || window.location.origin) + '/api/v1' /* NCE redeploy: same-origin API */;
   var requestCache = {};
   var wallState = {};
 

@@ -1,7 +1,7 @@
 (function(root){
   'use strict';
   var FAPI='https://fapi.binance.com/fapi/v1', FDATA='https://fapi.binance.com/futures/data';
-  var NCE='https://nce-api.78.46.134.148.sslip.io/api/v1', SYMBOL='BTCUSDT', cache={};
+  var NCE=(window.NCE_API_BASE || window.location.origin) + '/api/v1' /* NCE redeploy: same-origin API */, SYMBOL='BTCUSDT', cache={};
   var HORIZONS=[5,10,30], WEIGHTS={5:{'1s':.50,'1m':.35,'5m':.15},10:{'1s':.30,'1m':.42,'5m':.28},30:{'1s':.10,'1m':.35,'5m':.55}};
   function n(v,d){v=Number(v);return Number.isFinite(v)?v:(d==null?null:d)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
