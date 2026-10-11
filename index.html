@@ -469,6 +469,12 @@
         </div>
         <nav id="tabs" aria-label="Əsas bölmələr"></nav>
         <div id="chart-container">
+<div id="chart-modes" style="position:absolute;top:8px;right:110px;z-index:25;display:flex;gap:3px;background:rgba(13,17,23,.92);padding:3px;border-radius:6px;border:1px solid #30363d;">
+  <button type="button" data-mode="candle" class="mode-btn on" style="background:#1f6feb;color:#fff;border:none;padding:3px 7px;border-radius:3px;font-size:11px;cursor:pointer;">Şam</button>
+  <button type="button" data-mode="askbid" class="mode-btn" style="background:#161b22;color:#c9d1d9;border:1px solid #30363d;padding:3px 7px;border-radius:3px;font-size:11px;cursor:pointer;">Ask-Bid</button>
+  <button type="button" data-mode="delta" class="mode-btn" style="background:#161b22;color:#c9d1d9;border:1px solid #30363d;padding:3px 7px;border-radius:3px;font-size:11px;cursor:pointer;">Delta</button>
+  <button type="button" data-mode="volume" class="mode-btn" style="background:#161b22;color:#c9d1d9;border:1px solid #30363d;padding:3px 7px;border-radius:3px;font-size:11px;cursor:pointer;">Volume</button>
+</div>
             <div id="ct"></div>
             <div id="drawing-toolbar" aria-label="Chart drawing tools">
                 <button type="button" data-draw-tool="select" title="Seç / taşı">↖ Seç</button>
@@ -2531,7 +2537,7 @@ if (!window.NCELiquidationBoardV2) {
         }
 
         function marketStructureMarkers(list) {
-          var rows = closedBars(list), markers = [], zones = [], breaks = [], highs = [], lows = [], left = 2, right = 2;
+          var rows = closedBars(list), markers = [], zones = [], breaks = [], highs = [], lows = [], left = 4, right = 4;
           if (rows.length < 12) return {markers:markers,zones:zones};
           function marker(x, key, position, shape, text) { if (structureInd[key]) markers.push({time:x.t,position:position,color:STRUCTURE_COLORS[key],shape:shape||'circle',text:text||STRUCTURE_LABELS[key],size:1}); }
           for (var i=left;i<rows.length-right;i++) {
@@ -3089,5 +3095,6 @@ if (!window.NCELiquidationBoardV2) {
             if (el) el.style.display = visible ? 'block' : 'none';
         }
     </script>
+<script src="nce-chart-modes.js"></script>
 </body>
 </html>
