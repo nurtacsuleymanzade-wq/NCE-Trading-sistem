@@ -30,7 +30,7 @@ h1{color:#58a6ff;margin-bottom:20px}
 
 <script>
 async function loadData() {
-  const res = await fetch('data/live_status.json');
+  const res = await fetch('../data/live_status.json');
   const d = await res.json();
   
   if(d.prices) {
