@@ -17,10 +17,10 @@
    "2026-10-07"
   ],
   "prereg_sha256": "0a76530d017de51bddf7edf3bdc648f37d5d675a2b5af6beb47afdea4a5b3491",
-  "built_utc": "2026-10-24 03:43",
+  "built_utc": "2026-10-24 03:47",
   "last_bar_utc": "2026-10-24 02:00:00",
   "live_price": 80964.9,
-  "live_book_imb10": 0.302,
+  "live_book_imb10": 0.546,
   "forward_start": "2026-10-23"
  },
  "rows": [
