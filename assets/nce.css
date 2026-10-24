@@ -76,3 +76,10 @@ table.t td.n, table.t th.n { text-align: right; font-variant-numeric: tabular-nu
   .grid { grid-template-columns: 1fr; }
   #upd { margin-left: 0; width: 100%; }
 }
+
+/* Edge Finder */
+.ebar { position: relative; height: 12px; background: #21262d; border-radius: 4px; min-width: 140px; }
+.ebar i { position: absolute; top: 0; height: 100%; }
+.ebar .eci { background: #1f6feb88; border-radius: 3px; }
+.ebar .ept { width: 2px; background: #fff; }
+.ebar .ebs { width: 2px; background: var(--y); }

@@ -10,7 +10,7 @@
   var EVAL = { '1s': '1m', '1m': '1m', '3m': '3m', '5m': '5m', '15m': '15m', '1h': '1h', '4h': '4h', '1D': '4h', '3D': '4h' };
   var TABS = [
     ['konsensus', 'Yekdil qərar'], ['tf', 'TF matrisi'], ['vp', 'Volume Profile'], ['ict', 'ICT strukturu'],
-    ['flow', 'Capital Flow'], ['liq', 'Likvidasiya xəritəsi'], ['ssenari', 'Ssenarilər'], ['stat', 'Jurnal statistikası'], ['haqqinda', 'Metod']
+    ['flow', 'Capital Flow'], ['liq', 'Likvidasiya xəritəsi'], ['ssenari', 'Ssenarilər'], ['stat', 'Jurnal statistikası'], ['edge', 'Edge kalibrasiyası'], ['haqqinda', 'Metod']
   ];
   // köhnə URL-lərlə uyğunluq (?panel=Likidite+ve+Liquidation+Haritası və s.)
   var PANEL_ALIAS = { 'likidite ve liquidation haritası': 'liq', 'likvidasiya': 'liq', 'liquidation': 'liq', 'capital flow': 'flow',
@@ -323,9 +323,55 @@
 
   function renderPanel() {
     var el = $('panel');
+    if (S.tab === 'edge') { if (!EDGE && !EDGE_ERR) loadEdge(); el.innerHTML = pEdge(); return; }
     if (!C()) { el.innerHTML = noData(); return; }
     var f = { konsensus: pKonsensus, tf: pTF, vp: pVP, ict: pICT, flow: pFlow, liq: pLiq, ssenari: pScen, stat: pStat, haqqinda: pAbout }[S.tab] || pKonsensus;
     try { el.innerHTML = f(); } catch (e) { el.innerHTML = '<div class="banner">Panel xətası: ' + esc(e.message) + '</div>'; if (window.console) console.error(e); }
+  }
+
+  // ---------------------------------------------------------------- Edge Finder (statik kalibrasiya, data/edge_calibration.json)
+  var EDGE = null, EDGE_ERR = null;
+  function loadEdge() {
+    fetch('data/edge_calibration.json?t=' + Math.floor(Date.now() / 600000)).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (j) { EDGE = j; EDGE_ERR = null; if (S.tab === 'edge') renderPanel(); })
+      .catch(function (e) { EDGE_ERR = e.message; if (S.tab === 'edge') renderPanel(); });
+  }
+  function vBadge(v) {
+    var m = { 'EDGE': ['ok', 'EDGE var'], 'NO EDGE': ['no', 'Edge yoxdur'], 'UNRELIABLE': ['bad', 'Etibarsız (n<20)'] }[v] || ['no', v || '—'];
+    return '<span class="tag ' + m[0] + '">' + m[1] + '</span>';
+  }
+  function ciBar(r) {
+    if (!r || !r.n) return '<span class="muted">hadisə yoxdur</span>';
+    var L = function (x) { return Math.max(0, Math.min(100, 100 * x)).toFixed(1) + '%'; };
+    return '<div class="ebar" title="Mavi: 95% etibar aralığı · Ağ: nəticə · Sarı: baza (təsadüfi)">' +
+      '<i class="eci" style="left:' + L(r.ci_lo) + ';width:' + (100 * (r.ci_hi - r.ci_lo)).toFixed(1) + '%"></i>' +
+      '<i class="ept" style="left:' + L(r.pct) + '"></i>' + (r.base != null ? '<i class="ebs" style="left:' + L(r.base) + '"></i>' : '') + '</div>';
+  }
+  function pEdge() {
+    if (!EDGE) return EDGE_ERR ? '<div class="banner">Edge datası yüklənmədi: ' + esc(EDGE_ERR) + '</div>' : '<div class="empty">Yüklənir…</div>';
+    var m = EDGE.meta || {}, rows = EDGE.rows || [];
+    var live = rows.filter(function (r) { return r.live; });
+    var h = '<div class="verdict">Sadə dillə: hər sətir bir "əgər X olsa, sonra Y olurmu?" sualıdır. "100 haldan" sütunu keçmişdə bu vəziyyət yarananda Y-nin neçə dəfə baş verdiyini, "Baza" isə təsadüfi anlarda neçə dəfə baş verdiyini göstərir. Fərq yoxdursa — edge yoxdur.</div>';
+    h += '<div class="grid" style="margin-top:12px"><div class="card"><h3>İndi hansı şərtlər doğrudur?</h3>' +
+      (live.length ? live.map(function (r) { return '<div class="zone"><span>' + esc(r.oos.label) + '</span>' + vBadge(r.oos.verdict) + '</div>'; }).join('') : '<div class="empty">Heç bir kombin aktiv deyil.</div>') +
+      '<div class="note">Son bağlanmış 1s şam: ' + esc(m.last_bar_utc) + ' UTC · qiymət ' + px(m.live_price) + ' · book imbalance (anlıq, top-10) ' + esc(m.live_book_imb10) + ' · yenilənib: ' + esc(m.built_utc) + ' UTC (' + ago((m.built_utc || '').replace(' ', 'T')) + ')</div></div>' +
+      '<div class="card"><h3>Necə oxumalı?</h3><div class="kv"><span>OOS</span><span>Yalnız qaydalar donduqdan sonra yoxlanan dövr: ' + esc((m.oos || []).join(' → ')) + ' (book: ' + esc((m.book_oos || []).join(' → ')) + ')</span>' +
+      '<span>Train</span><span>' + esc((m.train || []).join(' → ')) + ' — yalnız məlumat üçün</span><span>EDGE</span><span>OOS n≥20, 95% aralığın aşağı ucu bazadan yuxarı və Bonferroni p&lt;0.0033</span>' +
+      '<span>Net bp</span><span>Hadisə istiqamətində orta gəlir − 10 bp xərc</span><span>PREREG</span><span style="word-break:break-all">sha256 ' + esc(m.prereg_sha256) + '</span></div></div></div>';
+    h += '<div class="card" style="margin-top:12px"><h3>Kalibrasiya cədvəli (OOS)</h3><div class="tw"><table><thead><tr><th>Kombin (əgər → sonra)</th><th>n</th><th>100 haldan</th><th>Baza</th><th>Lift</th><th style="min-width:160px">95% aralıq / baza</th><th>Net bp</th><th>Train</th><th>Forward (canlı)</th><th>Verdikt</th><th>İndi</th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        var o = r.oos, t = r.train, f = r.forward;
+        return '<tr><td>' + esc(o.label) + '</td><td>' + o.n + '</td><td><b>' + (o.pct == null ? '—' : Math.round(100 * o.pct)) + '</b></td><td>' + (o.base == null ? '—' : Math.round(100 * o.base)) + '</td><td>' +
+          (o.lift == null ? '—' : o.lift.toFixed(2)) + '</td><td>' + ciBar(o) + '</td><td>' + (o.net_bp == null ? '—' : sgn(o.net_bp, 1)) + '</td><td class="muted">' + (t.pct == null ? '—' : Math.round(100 * t.pct) + ' / ' + Math.round(100 * t.base) + ' (n ' + t.n + ')') + '</td><td class="muted">' +
+          (f && f.n ? Math.round(100 * f.pct) + ' (n ' + f.n + ')' : 'yığılır') + '</td><td>' + vBadge(o.verdict) + '</td><td>' + (r.live ? '<span class="tag ok">● aktiv</span>' : '') + '</td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      '<div class="note">Ağ xətt = nəticə, sarı xətt = baza (təsadüfi giriş), mavi = 95% Wilson aralığı. Mavi zolaq sarı xətti örtürsə, nəticə təsadüfdən fərqlənmir.</div></div>';
+    h += '<div class="card" style="margin-top:12px"><h3>Dürüst qeydlər</h3><ul class="note" style="padding-left:18px">' +
+      '<li>Bu, maliyyə məsləhəti deyil. Keçmiş tezlik gələcəyə zəmanət vermir.</li>' +
+      '<li>"Edge var" nəticəsi trade edilə bilən demək deyil: xərcdən sonra net bp mənfi ola bilər. Məs. "Value Area → POC" toxunma tezliyidir, gəlir deyil; hadisə anında qiymət POC-a onsuz da yaxın olduğu üçün baza ilə müqayisə ədalətsiz ola bilər.</li>' +
+      '<li>Likvidasiya xəritəsi tarixən bərpa oluna bilmir, ona görə "maqnit" PDH yaxınlığı ilə yoxlanıb. Book kombinləri yalnız ~2 aylıq data ilə (11 avq – 7 okt 2026) yoxlanıb.</li>' +
+      '<li>15 kombin qaydalar nəticəyə baxılmadan donduruldu (PREREG). Forward sütunu ' + esc(m.forward_start) + '-dən sonra yığılır və verdikti dəyişmir.</li></ul></div>';
+    return h;
   }
 
   // ---------------------------------------------------------------- start
