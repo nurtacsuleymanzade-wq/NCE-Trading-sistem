@@ -9,7 +9,7 @@
   var PROFS = ['1h', '4h', '1D', '3D'];
   var EVAL = { '1s': '1m', '1m': '1m', '3m': '3m', '5m': '5m', '15m': '15m', '1h': '1h', '4h': '4h', '1D': '4h', '3D': '4h' };
   var TABS = [
-    ['konsensus', 'Yekdil qərar'], ['tf', 'TF matrisi'], ['vp', 'Volume Profile'], ['ict', 'ICT strukturu'],
+    ['konus', 'Konus (5-60 dəq)'], ['konsensus', 'Yekdil qərar'], ['tf', 'TF matrisi'], ['vp', 'Volume Profile'], ['ict', 'ICT strukturu'],
     ['flow', 'Capital Flow'], ['liq', 'Likvidasiya xəritəsi'], ['ssenari', 'Ssenarilər'], ['stat', 'Jurnal statistikası'], ['edge', 'Edge kalibrasiyası'], ['haqqinda', 'Metod']
   ];
   // köhnə URL-lərlə uyğunluq (?panel=Likidite+ve+Liquidation+Haritası və s.)
@@ -19,7 +19,7 @@
   var LEVEL_AZ = { POC: 'POC', VAH: 'VAH', VAL: 'VAL', HVN: 'HVN', LVN: 'LVN', nPOC: 'naked POC', EQH: 'EQH', EQL: 'EQL',
     FVG_mid: 'FVG ortası', OB_mid: 'OB ortası' };
 
-  var S = { tf: TFS.indexOf(QS.get('tf')) >= 0 ? QS.get('tf') : '1h', prof: '1h', tab: 'konsensus', data: null, stats: null,
+  var S = { tf: TFS.indexOf(QS.get('tf')) >= 0 ? QS.get('tf') : '1h', prof: '1h', tab: 'konus', data: null, stats: null,
             err: null, lastOk: 0, chart: null, cs: null, dchart: null, ds: null, lines: [] };
   var pq = (QS.get('panel') || '').toLowerCase();
   if (pq) { var tk = TABS.filter(function (t) { return t[0] === pq; })[0]; S.tab = tk ? tk[0] : (PANEL_ALIAS[pq] || S.tab); }
@@ -321,8 +321,85 @@
       '<div class="card"><h3>Dürüst məhdudiyyətlər</h3><div class="note" style="font-size:.92em">• 1 dəqiqədən 1 günə qədər bal əsaslı yön proqnozu indiyə qədər bazanı keçmir.<br>• Profil səviyyələrinin çoxu bazaya yaxındır (lift 0.95–1.03); zəif müsbət: 1D naked POC, FVG ortası, EQH/EQL.<br>• Canlı likvidasiya, spot delta və max pain 14.10.2026-dan var; tarixi arxivdə yoxdur.<br>• Canlı 1s barları 5 dəqiqəyə qədər gecikə bilər (collector snapshot-ları 5 dəqiqəlik fayllarda).<br>• Köhnə serverdəki observer, paper trade və Hova datası itib; köhnə sayt "Köhnə sayt (arxiv)" linkindədir.</div></div></div>';
   }
 
+
+  // ---------------------------------------------------------------- Konus: diapazon proqnozu (evol_emp), brauzerdə hesablanır
+  // EWMA vol (halflife 30 dəq, 1m log gəlir) × √h × empirik standartlaşdırılmış kvantillər (BTCUSDT perp, son ~6 ay, walk-forward).
+  var CONE_H = [5, 10, 15, 20, 30, 60], CONE_Q = [5, 10, 25, 50, 75, 90, 95];
+  var CONE_Z = {"5": [-1.57907, -1.1558, -0.56746, -0.00382, 0.55498, 1.15787, 1.60315], "10": [-1.57051, -1.1468, -0.56565, -0.00752, 0.55649, 1.15203, 1.59897], "15": [-1.58405, -1.14842, -0.56216, -0.00867, 0.55462, 1.15287, 1.59791], "20": [-1.58562, -1.15161, -0.56693, -0.00638, 0.55602, 1.15207, 1.59856], "30": [-1.59556, -1.15952, -0.56831, -0.00411, 0.55841, 1.15006, 1.60644], "60": [-1.6369, -1.17301, -0.57043, -0.00298, 0.55967, 1.1695, 1.63215]};
+  // walk-forward test (2026-04..2026-10, n=61 632 hər ufuqda): örtük 80%/90%, uncond-a qarşı pinball üstünlüyü %
+  var CONE_CAL = { 5: [0.8007, 0.8999, 7.24], 10: [0.8002, 0.8985, 6.86], 15: [0.8009, 0.899, 6.53], 20: [0.7999, 0.8991, 6.41], 30: [0.7989, 0.8976, 6.21], 60: [0.795, 0.8964, 5.35] };
+  var CONE = { t: 0, err: null, last: null, vol: null, asof: null, q: null, hist: null, timer: null };
+  function loadCone() {
+    fetch('https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=1m&limit=1500', { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (k) {
+        k = k.slice(0, -1); // açıq (bitməmiş) şam çıxarılır
+        if (k.length < 200) throw new Error('az məlumat');
+        var a = 1 - Math.pow(0.5, 1 / 30), num_ = 0, den = 0, prev = null;
+        for (var i = 0; i < k.length; i++) {
+          var c = +k[i][4];
+          if (prev != null) { var r = Math.log(c / prev); num_ = num_ * (1 - a) + r * r; den = den * (1 - a) + 1; }
+          prev = c;
+        }
+        var v = Math.sqrt(num_ / den), p = +k[k.length - 1][4], q = {};
+        CONE_H.forEach(function (h) { q[h] = CONE_Z[h].map(function (z) { return p * Math.exp(v * Math.sqrt(h) * z); }); });
+        CONE.t = Date.now(); CONE.err = null; CONE.last = p; CONE.vol = v; CONE.asof = k[k.length - 1][0] + 60000; CONE.q = q;
+        CONE.hist = k.slice(-90).map(function (x) { return [x[0] + 60000, +x[4]]; });
+        if (S.tab === 'konus') renderPanel();
+      })
+      .catch(function (e) { CONE.err = e.message || String(e); if (S.tab === 'konus') renderPanel(); });
+    if (!CONE.timer) CONE.timer = setInterval(function () { if (S.tab === 'konus' && !document.hidden) loadCone(); }, 60000);
+  }
+  function coneSvg() {
+    var W = 760, Hh = 300, L = 8, R = 70, T = 10, B = 24, hist = CONE.hist, t0 = hist[0][0], t1 = CONE.asof + 60 * 60000;
+    var lo = Infinity, hi = -Infinity;
+    hist.forEach(function (x) { lo = Math.min(lo, x[1]); hi = Math.max(hi, x[1]); });
+    CONE_H.forEach(function (h) { lo = Math.min(lo, CONE.q[h][0]); hi = Math.max(hi, CONE.q[h][6]); });
+    var pad = (hi - lo) * 0.05; lo -= pad; hi += pad;
+    function X(t) { return L + (W - L - R) * (t - t0) / (t1 - t0); }
+    function Y(p) { return T + (Hh - T - B) * (hi - p) / (hi - lo); }
+    var pts = [[CONE.asof, null]].concat(CONE_H.map(function (h) { return [CONE.asof + h * 60000, h]; }));
+    function val(pt, j) { return pt[1] == null ? CONE.last : CONE.q[pt[1]][j]; }
+    function band(a, b, col) {
+      var up = pts.map(function (pt) { return X(pt[0]).toFixed(1) + ',' + Y(val(pt, b)).toFixed(1); });
+      var dn = pts.slice().reverse().map(function (pt) { return X(pt[0]).toFixed(1) + ',' + Y(val(pt, a)).toFixed(1); });
+      return '<polygon points="' + up.concat(dn).join(' ') + '" fill="' + col + '"/>';
+    }
+    var s = '<svg viewBox="0 0 ' + W + ' ' + Hh + '" style="width:100%;height:auto;display:block" role="img" aria-label="Qiymət diapazonu konusu">';
+    for (var g = 0; g <= 4; g++) { var gp = lo + (hi - lo) * g / 4; s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(gp) + '" y2="' + Y(gp) + '" stroke="#21262d"/><text x="' + (W - R + 4) + '" y="' + (Y(gp) + 4) + '" fill="#8b949e" font-size="11">' + num(gp, 0) + '</text>'; }
+    s += band(0, 6, 'rgba(56,139,253,.15)') + band(1, 5, 'rgba(56,139,253,.22)') + band(2, 4, 'rgba(56,139,253,.32)');
+    s += '<polyline fill="none" stroke="#58a6ff" stroke-dasharray="4 3" points="' + pts.map(function (pt) { return X(pt[0]).toFixed(1) + ',' + Y(val(pt, 3)).toFixed(1); }).join(' ') + '"/>';
+    s += '<polyline fill="none" stroke="#e6edf3" stroke-width="1.5" points="' + hist.map(function (x) { return X(x[0]).toFixed(1) + ',' + Y(x[1]).toFixed(1); }).join(' ') + '"/>';
+    s += '<line x1="' + X(CONE.asof) + '" x2="' + X(CONE.asof) + '" y1="' + T + '" y2="' + (Hh - B) + '" stroke="#30363d"/>';
+    CONE_H.forEach(function (h) { var x = X(CONE.asof + h * 60000); s += '<text x="' + x + '" y="' + (Hh - 6) + '" fill="#8b949e" font-size="11" text-anchor="middle">+' + h + '</text>'; });
+    s += '<text x="' + (L + 2) + '" y="' + (Hh - 6) + '" fill="#8b949e" font-size="11">−90 dəq</text></svg>';
+    return s;
+  }
+  function pCone() {
+    var ban = '<div class="banner">Bu diapazon proqnozudur, istiqamət siqnalı deyil; istiqamət edge-i yoxdur.<div style="font-weight:400;font-size:.88em;margin-top:3px">EN: This is a range forecast, not a direction signal; there is no directional edge.</div></div>';
+    if (CONE.err && !CONE.q) return ban + '<div class="banner">Binance məlumatı alınmadı: ' + esc(CONE.err) + '. 60 s sonra yenidən cəhd ediləcək.</div>';
+    if (!CONE.q) return ban + '<div class="card"><div class="note">Binance 1m şamları yüklənir…</div></div>';
+    var rows = CONE_H.map(function (h) {
+      var q = CONE.q[h];
+      return '<tr><td>+' + h + ' dəq</td>' + q.map(function (x, j) { return '<td class="n"' + (j === 3 ? ' style="color:var(--wh);font-weight:600"' : '') + '>' + num(x, 0) + '</td>'; }).join('') +
+        '<td class="n">±' + (100 * (q[5] - q[1]) / 2 / CONE.last).toFixed(2) + '%</td></tr>';
+    }).join('');
+    var cal = CONE_H.map(function (h) { var c = CONE_CAL[h]; return '<tr><td>+' + h + ' dəq</td><td class="n">' + pct(c[0], 1) + '</td><td class="n">' + pct(c[1], 1) + '</td><td class="n">+' + c[2].toFixed(1) + '%</td></tr>'; }).join('');
+    var stale = CONE.err ? ' <span class="tag no">son yeniləmə alınmadı</span>' : '';
+    return ban +
+      '<div class="grid"><div class="card" style="grid-column:1/-1"><h3>BTCUSDT perp — 5–60 dəqiqəlik qiymət konusu' + stale + '</h3>' +
+      '<div class="note">Son bağlanış: <b>' + num(CONE.last, 1) + '</b> · EWMA vol (1 dəq): ' + (CONE.vol * 1e4).toFixed(2) + ' bp · yeniləndi ' + ago(new Date(CONE.t).toISOString()) + ' · hər 60 s</div>' +
+      coneSvg() + '<div class="note">Zolaqlar: açıq — 5–95%, orta — 10–90%, tünd — 25–75%; qırıq xətt — median (50%). Median praktiki olaraq cari qiymətdir: model istiqamət demir.</div></div>' +
+      '<div class="card" style="grid-column:1/-1"><h3>Kvantil cədvəli (USDT)</h3><div style="overflow-x:auto"><table class="t"><tr><th>Ufuq</th>' +
+      CONE_Q.map(function (q) { return '<th class="n">' + q + '%</th>'; }).join('') + '<th class="n">80% ±</th></tr>' + rows + '</table></div></div>' +
+      '<div class="card"><h3>Kalibrasiya (walk-forward test)</h3><table class="t"><tr><th>Ufuq</th><th class="n">80% örtük</th><th class="n">90% örtük</th><th class="n">Şərtsizə qarşı</th></tr>' + cal + '</table>' +
+      '<div class="note">Test: 2026-04 … 2026-10, hər ufuqda n=61 632, 120 dəq embarqo. İdeal örtük 80% / 90%. "Şərtsizə qarşı" — pinball itkisində 7 günlük şərtsiz paylanmadan yaxşılaşma.</div></div>' +
+      '<div class="card"><h3>Metod və məhdudiyyətlər</h3><div class="note" style="font-size:.92em">• Model: evol_emp — EWMA volatillik (yarımömür 30 dəq) × √h × empirik standartlaşdırılmış kvantillər.<br>• Hesablama brauzerdə, Binance public 1m şamlarından; server lazım deyil.<br>• LightGBM (order flow, funding, OI) cəmi +0.6–0.9% əlavə edir; istiqamət dəqiqliyi ~52% — komissiyanı ödəmir.<br>• İstifadə: stop məsafəsi, pozisiya ölçüsü, "bu hərəkət real ola bilərmi" qiymətləndirməsi.<br>• Bu, maliyyə məsləhəti deyil.</div></div></div>';
+  }
+
   function renderPanel() {
     var el = $('panel');
+    if (S.tab === 'konus') { if (!CONE.t && !CONE.err) loadCone(); try { el.innerHTML = pCone(); } catch (e) { el.innerHTML = '<div class="banner">Panel xətası: ' + esc(e.message) + '</div>'; } return; }
     if (S.tab === 'edge') { if (!EDGE && !EDGE_ERR) loadEdge(); el.innerHTML = pEdge(); return; }
     if (!C()) { el.innerHTML = noData(); return; }
     var f = { konsensus: pKonsensus, tf: pTF, vp: pVP, ict: pICT, flow: pFlow, liq: pLiq, ssenari: pScen, stat: pStat, haqqinda: pAbout }[S.tab] || pKonsensus;
